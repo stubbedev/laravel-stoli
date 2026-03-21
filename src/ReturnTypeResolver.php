@@ -69,6 +69,13 @@ final readonly class ReturnTypeResolver
 
     private function tryActualExecution(LaravelRoute $route): ?array
     {
+        // Only run in the testing environment (i.e. --env=testing was passed).
+        // In local/production environments controllers may call exit()/die() or have
+        // side effects that would silently terminate the generation process.
+        if (!app()->environment('testing')) {
+            return null;
+        }
+
         // Only safe to call GET routes — no side effects
         if (!in_array('GET', $route->methods() ?? [])) {
             return null;

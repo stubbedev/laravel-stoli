@@ -1,0 +1,9 @@
+/vendor
+/.idea
+/app
+/resources/routes
+.phpunit.result.cache
+tests/routes/api.php
+tests/api.json
+
+.claude

@@ -1,0 +1,39 @@
+export interface Route {
+	uri: string;
+	host: string | null;
+}
+
+export interface StoliConfig<Routes extends Record<string, Route> = Record<string, Route>> {
+	rootUrl?: string;
+	routes: Routes;
+}
+
+type ExtractParams<T extends string> =
+	T extends `${string}{${infer Param}}${infer Rest}`
+		? (Param extends `${infer Name}?` ? Name : Param) | ExtractParams<Rest>
+		: never;
+
+export type RouteParams<
+	Routes extends Record<string, Route>,
+	N extends keyof Routes,
+> = Routes[N] extends { uri: infer U extends string }
+	? Partial<Record<ExtractParams<U>, string | number>> & Record<string, unknown>
+	: Record<string, unknown>;
+
+export class RouteService<Routes extends Record<string, Route> = Record<string, Route>> {
+	constructor(config: StoliConfig<Routes>);
+
+	has(name: string): boolean;
+
+	createURLWithoutQuery(
+		name: string,
+		parameters?: Record<string, unknown>,
+	): string;
+
+	generateFullURL(
+		name: string,
+		parameters?: Record<string, unknown>,
+	): string;
+}
+
+export default RouteService;

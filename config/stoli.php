@@ -145,7 +145,21 @@ return [
             | will be stored. If omitted, it falls back to the global 'library' path.
             |
             */
-            'path'     => 'resources/routes',
+            'path'        => 'resources/routes',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Strip Route Name Prefix
+            |--------------------------------------------------------------------------
+            |
+            | When set, this prefix is stripped from the beginning of every route name
+            | before it is emitted into the generated TypeScript file. This is useful
+            | when the module already implies the prefix — for example, a module named
+            | 'store' can set stripPrefix to 'store.' so that 'store.products.list'
+            | becomes 'products.list' in the output. Leave null to disable stripping.
+            |
+            */
+            'stripPrefix' => null,
         ],
     ]
 ];

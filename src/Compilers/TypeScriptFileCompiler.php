@@ -10,7 +10,10 @@ use StubbeDev\LaravelStoli\Items\Route;
 
 final readonly class TypeScriptFileCompiler implements Compiler
 {
-    public function __construct(private JsonFileCompiler $jsonFileGenerator)
+    public function __construct(
+        private JsonFileCompiler     $jsonFileGenerator,
+        private ConstraintTypeMapper $constraintTypeMapper = new ConstraintTypeMapper(),
+    )
     {
     }
 
@@ -21,7 +24,7 @@ final readonly class TypeScriptFileCompiler implements Compiler
         return self::template(
             $module,
             self::jsonToTsFormat($this->jsonFileGenerator->compile($file)),
-            self::generateParamsInterface($module, $file),
+            $this->generateParamsInterface($module, $file),
             self::generateResponseInterface($module, $file),
             self::generateMethodNameTypes($module, $file),
             self::collectTypeScriptImports($file),
@@ -59,10 +62,10 @@ final readonly class TypeScriptFileCompiler implements Compiler
         TS;
     }
 
-    private static function generateParamsInterface(string $module, File $file): string
+    private function generateParamsInterface(string $module, File $file): string
     {
         $entries = $file->routes()->reduce(function (array $acc, Route $route): array {
-            $uriParams  = self::extractUriParams($route->uri(), $route->wheres());
+            $uriParams  = $this->extractUriParams($route->uri(), $route->wheres());
             $formParams = $route->params() ?? [];
             // FormRequest params take precedence over URI params with the same name
             $merged = array_merge($uriParams, $formParams);
@@ -76,57 +79,23 @@ final readonly class TypeScriptFileCompiler implements Compiler
         return "export interface {$module}RouteParams {\n$body\n}";
     }
 
-    private static function extractUriParams(string $uri, array $wheres = []): array
+    private function extractUriParams(string $uri, array $wheres = []): array
     {
         preg_match_all('/\{(\w+)(\?)?\}/', $uri, $matches, PREG_SET_ORDER);
 
         $params = [];
         foreach ($matches as $match) {
-            $name = $match[1];
+            $name       = $match[1];
             $constraint = $wheres[$name] ?? null;
             $params[$name] = [
-                'type'     => $constraint !== null ? self::constraintToType($constraint) : 'string | number',
+                'type'     => $constraint !== null
+                    ? $this->constraintTypeMapper->map($constraint)
+                    : 'string | number',
                 'required' => empty($match[2]),
             ];
         }
 
         return $params;
-    }
-
-    private static function constraintToType(string $regex): string
-    {
-        // Exact patterns produced by Laravel's named constraint helpers
-        return match ($regex) {
-            '[0-9]+'                                                                                   => 'number',
-            '[a-zA-Z]+'                                                                                => 'string',
-            '[a-zA-Z0-9]+'                                                                             => 'string',
-            '[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}'                   => 'string', // whereUuid
-            '[0-7][0-9a-hjkmnp-tv-zA-HJKMNP-TV-Z]{25}'                                                 => 'string', // whereUlid
-            default                                                                                    => self::inferConstraintType($regex),
-        };
-    }
-
-    private static function inferConstraintType(string $regex): string
-    {
-        // Simple literal alternation (e.g. "users|groups|all", produced by whereIn) → union of string literals
-        if (preg_match('/^[a-zA-Z0-9_-]+(\|[a-zA-Z0-9_-]+)*$/', $regex)) {
-            return implode(' | ', array_map(
-                fn(string $v) => "'{$v}'",
-                explode('|', $regex),
-            ));
-        }
-
-        // Generic numeric-only pattern (e.g. "\d+", "[1-9][0-9]*") → number
-        $anchored = "/^(?:{$regex})$/";
-        if (
-            @preg_match($anchored, '') !== false
-            && preg_match($anchored, '123') === 1
-            && preg_match($anchored, 'abc') === 0
-        ) {
-            return 'number';
-        }
-
-        return 'string';
     }
 
     private static function generateResponseInterface(string $module, File $file): string

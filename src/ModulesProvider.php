@@ -39,7 +39,8 @@ final readonly class ModulesProvider
             $config['name'],
             $config['prefix'] ?? '',
             $config['path'] ?? $this->config->libraryPath(),
-            $config['absolute'] ?? true
+            $config['absolute'] ?? true,
+            $config['stripPrefix'] ?? null,
         );
     }
 

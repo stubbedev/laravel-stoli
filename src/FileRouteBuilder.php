@@ -82,6 +82,7 @@ final readonly class FileRouteBuilder
             $this->returnTypeResolver->resolve($route),
             $route->wheres,
             $route->methods(),
+            $module->stripPrefix(),
         );
     }
 

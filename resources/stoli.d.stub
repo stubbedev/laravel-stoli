@@ -23,17 +23,35 @@ export type RouteParams<
 export class RouteService<Routes extends Record<string, Route> = Record<string, Route>> {
 	constructor(config: StoliConfig<Routes>);
 
-	has(name: string): boolean;
+	has<N extends keyof Routes & string>(name: N): boolean;
 
-	createURLWithoutQuery(
-		name: string,
-		parameters?: Record<string, unknown>,
+	createURLWithoutQuery<N extends keyof Routes & string>(
+		name: N,
+		parameters?: RouteParams<Routes, N>,
 	): string;
 
-	generateFullURL(
-		name: string,
-		parameters?: Record<string, unknown>,
+	generateFullURL<N extends keyof Routes & string>(
+		name: N,
+		parameters?: RouteParams<Routes, N>,
 	): string;
 }
 
 export default RouteService;
+
+/**
+ * Create a standalone `route()` function bound to a RouteService instance.
+ * The returned function is fully typed when the routes are passed as `const`.
+ *
+ * @example
+ * import { createRoute } from './stoli';
+ * import routes from './api';
+ *
+ * const route = createRoute({ routes });
+ * route('users.show', { id: 1 }); // → '/users/1'
+ */
+export function createRoute<Routes extends Record<string, Route>>(
+	config: StoliConfig<Routes>,
+): <N extends keyof Routes & string>(
+	name: N,
+	parameters?: RouteParams<Routes, N>,
+) => string;

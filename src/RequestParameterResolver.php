@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli;
 
 use BackedEnum;
+use Closure;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Routing\Route as LaravelRoute;
+use Illuminate\Validation\ConditionalRules;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\Rules\In;
 use ReflectionClass;
@@ -288,6 +290,13 @@ final readonly class RequestParameterResolver
             return (string) $rule;
         }
 
+        // Closures and ConditionalRules cannot be statically analysed — fall back to `unknown`.
+        // We return the sentinel string 'unknown' so the type is preserved in the output
+        // rather than being silently dropped.
+        if ($rule instanceof Closure || $rule instanceof ConditionalRules) {
+            return 'unknown';
+        }
+
         return null;
     }
 
@@ -370,7 +379,7 @@ final readonly class RequestParameterResolver
             str_starts_with($rule, 'doesnt_end_with:'),
             str_starts_with($rule, 'current_password:') => 'string',
 
-            // Number types
+            // Number types — explicit numeric rules
             in_array($rule, ['integer', 'numeric'], true),
             str_starts_with($rule, 'decimal:'),
             str_starts_with($rule, 'digits:'),
@@ -378,6 +387,19 @@ final readonly class RequestParameterResolver
             str_starts_with($rule, 'min_digits:'),
             str_starts_with($rule, 'max_digits:'),
             str_starts_with($rule, 'multiple_of:') => 'number',
+
+            // Number types — size/comparison rules whose argument is a bare numeric literal.
+            // e.g. min:1, max:255, between:1,100, size:8, gt:0, gte:1, lt:10, lte:100.
+            // When the argument is a field name rather than a number (e.g. gt:other_field)
+            // these return null so they don't pollute the type of a string field.
+            str_starts_with($rule, 'min:'),
+            str_starts_with($rule, 'max:'),
+            str_starts_with($rule, 'size:'),
+            str_starts_with($rule, 'between:'),
+            str_starts_with($rule, 'gt:'),
+            str_starts_with($rule, 'gte:'),
+            str_starts_with($rule, 'lt:'),
+            str_starts_with($rule, 'lte:') => self::numericConstraintToType($rule),
 
             // Boolean types
             in_array($rule, ['boolean', 'accepted', 'declined'], true),
@@ -406,6 +428,13 @@ final readonly class RequestParameterResolver
             // Enum / union of literals
             str_starts_with($rule, 'in:') => self::parseInRule($rule),
 
+            // Exclusion: not_in:1,2,3 → Exclude<number, 1|2|3>
+            //            not_in:a,b,c → Exclude<string, 'a'|'b'|'c'>
+            str_starts_with($rule, 'not_in:') => self::parseNotInRule($rule),
+
+            // Sentinel for rules that cannot be statically analysed (Closure, ConditionalRules)
+            $rule === 'unknown' => 'unknown',
+
             // Everything else (modifiers, constraints) -> no type information
             default => null,
         };
@@ -413,11 +442,48 @@ final readonly class RequestParameterResolver
 
     private static function parseInRule(string $rule): string
     {
-        $values = str_getcsv(substr($rule, 3));
+        $values = str_getcsv(substr($rule, 3), escape: '');
 
         return implode(' | ', array_map(
             fn(string $value) => "'" . trim($value) . "'",
             $values,
         ));
+    }
+
+    private static function parseNotInRule(string $rule): string
+    {
+        $values = str_getcsv(substr($rule, 7), escape: '');
+
+        $allNumeric = array_reduce($values, fn(bool $carry, string $v) => $carry && is_numeric(trim($v)), true);
+
+        if ($allNumeric) {
+            $union = implode(' | ', array_map(fn(string $v) => trim($v), $values));
+            return "Exclude<number, $union>";
+        }
+
+        $union = implode(' | ', array_map(fn(string $v) => "'" . trim($v) . "'", $values));
+        return "Exclude<string, $union>";
+    }
+
+    /**
+     * Infer 'number' from size/comparison rules whose argument(s) are all bare
+     * numeric literals (integers or decimals).  Returns null when any argument
+     * is a field name, because those rules are equally valid on strings/arrays/files
+     * and we must not pollute their type.
+     *
+     * Examples that return 'number': min:1  max:255  between:1,100  size:8  gt:0  lte:99.5
+     * Examples that return null:     gt:other_field  between:1,other
+     */
+    private static function numericConstraintToType(string $rule): ?string
+    {
+        $args = substr($rule, strpos($rule, ':') + 1);
+
+        foreach (explode(',', $args) as $arg) {
+            if (!is_numeric(trim($arg))) {
+                return null;
+            }
+        }
+
+        return 'number';
     }
 }

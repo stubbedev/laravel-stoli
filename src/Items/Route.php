@@ -21,11 +21,21 @@ readonly class Route
         private ?array  $response = null,
         private array   $wheres = [],
         private array   $methods = [],
+        private ?string $stripPrefix = null,
     )
     {
     }
 
     public function name(): string
+    {
+        if ($this->stripPrefix !== null && str_starts_with($this->name, $this->stripPrefix)) {
+            return substr($this->name, strlen($this->stripPrefix));
+        }
+
+        return $this->name;
+    }
+
+    public function originalName(): string
     {
         return $this->name;
     }

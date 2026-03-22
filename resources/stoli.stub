@@ -71,3 +71,19 @@ export class RouteService {
 }
 
 export default RouteService;
+
+/**
+ * Create a standalone `route()` function bound to a RouteService instance.
+ * Prefer this over importing the class when tree-shaking matters.
+ *
+ * @example
+ * import { createRoute } from './stoli.js';
+ * import routes from './api.js';
+ *
+ * const route = createRoute({ routes });
+ * route('users.show', { id: 1 }); // → '/users/1'
+ */
+export function createRoute(config) {
+	const service = new RouteService(config);
+	return (name, parameters = {}) => service.generateFullURL(name, parameters);
+}

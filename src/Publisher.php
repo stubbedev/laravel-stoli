@@ -18,10 +18,10 @@ final readonly class Publisher
     {
     }
 
-    public function publish(bool $overrideLibrary): void
+    public function publish(bool $overrideLibrary, bool $safe = false): void
     {
         $this->createLibrary($overrideLibrary);
-        $this->routesFileExporter->publish();
+        $this->routesFileExporter->publish(safe: $safe);
         $this->axiosRouterExporter->publish();
     }
 

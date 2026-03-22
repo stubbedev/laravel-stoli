@@ -17,8 +17,12 @@ final readonly class Utils
         return preg_replace_callback('/^( {4})+/m', fn($m) => str_repeat("\t", strlen($m[0]) / 4), $json);
     }
 
-    public static function removeForwardSlashes(string $fragment): string
+    public static function removeForwardSlashes(?string $fragment): string
     {
+        if ($fragment === null) {
+            return '';
+        }
+
         return preg_replace('/(^\/?)|(\/?$)/', '', $fragment);
     }
 }

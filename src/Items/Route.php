@@ -20,6 +20,7 @@ readonly class Route
         private ?array  $params = null,
         private ?array  $response = null,
         private array   $wheres = [],
+        private array   $methods = [],
     )
     {
     }
@@ -57,6 +58,11 @@ readonly class Route
     public function wheres(): array
     {
         return $this->wheres;
+    }
+
+    public function methods(): array
+    {
+        return $this->methods;
     }
 
     public function primitives(): array

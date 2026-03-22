@@ -23,6 +23,7 @@ final readonly class TypeScriptFileCompiler implements Compiler
             self::jsonToTsFormat($this->jsonFileGenerator->compile($file)),
             self::generateParamsInterface($module, $file),
             self::generateResponseInterface($module, $file),
+            self::generateMethodNameTypes($module, $file),
             self::collectTypeScriptImports($file),
         );
     }
@@ -37,7 +38,7 @@ final readonly class TypeScriptFileCompiler implements Compiler
         return 'ts';
     }
 
-    private static function template(string $module, string $routes, string $paramsInterface, string $responseInterface, string $imports = ''): string
+    private static function template(string $module, string $routes, string $paramsInterface, string $responseInterface, string $methodNameTypes, string $imports = ''): string
     {
         $middle = $responseInterface !== ''
             ? "$paramsInterface\n\n$responseInterface"
@@ -52,6 +53,7 @@ final readonly class TypeScriptFileCompiler implements Compiler
 
         export type {$module}RouteName = keyof {$module}RouteParams;
 
+        $methodNameTypes
         export default routes;
 
         TS;
@@ -157,6 +159,46 @@ final readonly class TypeScriptFileCompiler implements Compiler
         $body = implode("\n", $entries);
 
         return "export interface {$module}RouteResponse {\n$body\n}";
+    }
+
+    private static function generateMethodNameTypes(string $module, File $file): string
+    {
+        // The HTTP methods we expose on the Stoli axios wrapper.
+        // Laravel always includes HEAD alongside GET; we treat HEAD as GET for routing purposes.
+        $supported = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+        // Collect the set of route names that respond to each HTTP method.
+        $byMethod = array_fill_keys($supported, []);
+
+        $file->routes()->each(function (Route $route) use (&$byMethod, $supported): void {
+            // Normalise: HEAD is covered by GET in the wrapper.
+            $methods = array_map('strtoupper', $route->methods());
+            if (in_array('HEAD', $methods, true) && !in_array('GET', $methods, true)) {
+                $methods[] = 'GET';
+            }
+
+            foreach ($supported as $method) {
+                if (in_array($method, $methods, true)) {
+                    $byMethod[$method][] = "'{$route->name()}'";
+                }
+            }
+        });
+
+        $lines = [];
+        foreach ($supported as $method) {
+            $names = $byMethod[$method];
+            $studlyMethod = ucfirst(strtolower($method));
+
+            if (empty($names)) {
+                $union = 'never';
+            } else {
+                $union = implode(' | ', $names);
+            }
+
+            $lines[] = "export type {$module}{$studlyMethod}RouteName = $union;";
+        }
+
+        return implode("\n", $lines) . "\n";
     }
 
     private static function buildShapeType(array $shape): string

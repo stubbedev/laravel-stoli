@@ -81,6 +81,7 @@ final readonly class FileRouteBuilder
             $this->parameterResolver->resolve($route),
             $this->returnTypeResolver->resolve($route),
             $route->wheres,
+            $route->methods(),
         );
     }
 

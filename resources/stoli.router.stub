@@ -1,40 +1,48 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { RouteService } from './stoli';
-import routes, { type {{STUDLY}}RouteParams, type {{STUDLY}}RouteName, type {{STUDLY}}RouteResponse } from './{{MODULE}}';
+import routes, {
+	type {{STUDLY}}RouteParams,
+	type {{STUDLY}}RouteResponse,
+	type {{STUDLY}}GetRouteName,
+	type {{STUDLY}}PostRouteName,
+	type {{STUDLY}}PutRouteName,
+	type {{STUDLY}}PatchRouteName,
+	type {{STUDLY}}DeleteRouteName,
+} from './{{MODULE}}';
 
-type {{STUDLY}}RouteResponseType<N extends {{STUDLY}}RouteName> =
+type {{STUDLY}}RouteResponseType<N extends keyof {{STUDLY}}RouteParams> =
 	N extends keyof {{STUDLY}}RouteResponse ? {{STUDLY}}RouteResponse[N] : Record<string, unknown>;
 
 const routeService = new RouteService({ routes });
 
-function buildUrl<N extends {{STUDLY}}RouteName>(routeName: N, params: {{STUDLY}}RouteParams[N]): [string, Record<string, unknown>] {
+function buildUrl<N extends keyof {{STUDLY}}RouteParams>(routeName: N, params: {{STUDLY}}RouteParams[N]): [string, Record<string, unknown>] {
 	const remaining = { ...params } as Record<string, unknown>;
 	const url = routeService.createURLWithoutQuery(routeName as string, remaining);
 	return [url, remaining];
 }
 
 export const Stoli = {
-	get<N extends {{STUDLY}}RouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
+	get<N extends {{STUDLY}}GetRouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
 		const [url, queryParams] = buildUrl(routeName, params ?? {} as {{STUDLY}}RouteParams[N]);
 		return axios.get<{{STUDLY}}RouteResponseType<N>>(url, { params: queryParams, ...config });
 	},
 
-	post<N extends {{STUDLY}}RouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
+	post<N extends {{STUDLY}}PostRouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
 		const [url, body] = buildUrl(routeName, params ?? {} as {{STUDLY}}RouteParams[N]);
 		return axios.post<{{STUDLY}}RouteResponseType<N>>(url, body, config);
 	},
 
-	put<N extends {{STUDLY}}RouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
+	put<N extends {{STUDLY}}PutRouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
 		const [url, body] = buildUrl(routeName, params ?? {} as {{STUDLY}}RouteParams[N]);
 		return axios.put<{{STUDLY}}RouteResponseType<N>>(url, body, config);
 	},
 
-	patch<N extends {{STUDLY}}RouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
+	patch<N extends {{STUDLY}}PatchRouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
 		const [url, body] = buildUrl(routeName, params ?? {} as {{STUDLY}}RouteParams[N]);
 		return axios.patch<{{STUDLY}}RouteResponseType<N>>(url, body, config);
 	},
 
-	delete<N extends {{STUDLY}}RouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
+	delete<N extends {{STUDLY}}DeleteRouteName>(routeName: N, params?: {{STUDLY}}RouteParams[N], config: AxiosRequestConfig = {}): Promise<AxiosResponse<{{STUDLY}}RouteResponseType<N>>> {
 		const [url, queryParams] = buildUrl(routeName, params ?? {} as {{STUDLY}}RouteParams[N]);
 		return axios.delete<{{STUDLY}}RouteResponseType<N>>(url, { params: queryParams, ...config });
 	},

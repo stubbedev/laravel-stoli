@@ -7,3 +7,4 @@ tests/routes/api.php
 tests/api.json
 
 .claude
+.cache

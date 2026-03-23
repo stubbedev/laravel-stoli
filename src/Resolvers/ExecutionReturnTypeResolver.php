@@ -77,7 +77,11 @@ final readonly class ExecutionReturnTypeResolver
                 } finally {
                     $this->container->instance('request', $prevRequest);
                     $this->container->instance(Request::class, $prevRequest);
-                    Auth::setUser($prevUser);
+                    if ($prevUser !== null) {
+                        Auth::setUser($prevUser);
+                    } else {
+                        Auth::logout();
+                    }
                 }
             } finally {
                 DB::rollBack();

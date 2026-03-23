@@ -93,10 +93,7 @@ final readonly class ExecutionReturnTypeResolver
         if ($executionError !== null) {
             $routeName = $route->getName() ?? $route->uri();
             $message   = $executionError->getMessage();
-            trigger_error(
-                "[stoli] Layer-0 execution failed for route \"{$routeName}\": {$message} — falling back to static analysis.",
-                E_USER_WARNING,
-            );
+            fwrite(STDERR, "[stoli] Layer-0 execution failed for route \"{$routeName}\": {$message} — falling back to static analysis.\n");
             return null;
         }
 

@@ -7,6 +7,8 @@ namespace StubbeDev\LaravelStoli;
 use Illuminate\Filesystem\Filesystem;
 use StubbeDev\LaravelStoli\Items\File;
 
+use function Illuminate\Filesystem\join_paths;
+
 /**
  * Stores a SHA-256 hash of each compiled route file's content so that
  * stoli:generate can skip re-writing files that have not changed.
@@ -32,14 +34,17 @@ final readonly class RouteHashCache
 
     /**
      * Returns true if $content is identical to the last written content for
-     * this file, meaning the file on disk is already up-to-date.
+     * this file AND the file still exists on disk.
      */
     public function isUnchanged(File $file, string $content): bool
     {
-        $key  = $this->key($file);
-        $hash = hash('sha256', $content);
+        $key      = $this->key($file);
+        $hash     = hash('sha256', $content);
+        $onDisk   = join_paths($file->path(), $file->name() . '.ts');
 
-        return isset($this->stored[$key]) && $this->stored[$key] === $hash;
+        return isset($this->stored[$key])
+            && $this->stored[$key] === $hash
+            && $this->filesystem->exists($onDisk);
     }
 
     /**

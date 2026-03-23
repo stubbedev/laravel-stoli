@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Schema;
 use ReflectionMethod;
 use ReflectionNamedType;
 use Throwable;
+use Illuminate\Routing\Router;
 
 /**
  * Layer 0: Resolve a route's response type by actually executing the controller
@@ -53,6 +54,10 @@ final readonly class ExecutionReturnTypeResolver
             return null;
         }
 
+        if ($this->controllerCallsExit($action)) {
+            return null;
+        }
+
         $response       = null;
         $executionError = null;
 
@@ -62,15 +67,27 @@ final readonly class ExecutionReturnTypeResolver
             try {
                 $uri = $this->buildUriWithSeededModels($route);
 
+                $prevUser = Auth::user();
+                $user     = $this->loginWithSeededUser();
+
                 $fakeRequest = Request::create('/' . $uri, 'GET');
                 $fakeRequest->setRouteResolver(fn() => $route);
+                $fakeRequest->setUserResolver(fn() => $user);
+
+                // Run implicit model binding so route parameters are resolved
+                // and the route is considered "bound" by the router.
+                try {
+                    /** @var Router $router */
+                    $router = $this->container->make(Router::class);
+                    $router->substituteBindings($route);
+                    $router->substituteImplicitBindings($route);
+                } catch (Throwable) {
+                    // Binding substitution is best-effort; continue anyway.
+                }
 
                 $prevRequest = $this->container->make('request');
                 $this->container->instance('request', $fakeRequest);
                 $this->container->instance(Request::class, $fakeRequest);
-
-                $prevUser = Auth::user();
-                $this->loginWithSeededUser();
 
                 try {
                     $response = $this->container->call($action);
@@ -260,13 +277,50 @@ final readonly class ExecutionReturnTypeResolver
         };
     }
 
-    private function loginWithSeededUser(): void
+    /**
+     * Returns true if the controller method (or its source file) contains a bare
+     * exit/die call that would kill the current process if the action were invoked.
+     */
+    private function controllerCallsExit(string $action): bool
+    {
+        [$controller, $method] = str_contains($action, '@')
+            ? explode('@', $action, 2)
+            : [$action, '__invoke'];
+
+        try {
+            $ref  = new ReflectionMethod($controller, $method);
+            $file = $ref->getFileName();
+
+            if ($file === false || !file_exists($file)) {
+                return false;
+            }
+
+            $source = file_get_contents($file);
+            if ($source === false) {
+                return false;
+            }
+
+            // Tokenise and look for a bare exit/die statement (T_EXIT).
+            // This avoids false positives from string literals like "will exit".
+            $tokens = @token_get_all($source);
+            foreach ($tokens as $token) {
+                if (is_array($token) && $token[0] === T_EXIT) {
+                    return true;
+                }
+            }
+        } catch (Throwable) {
+        }
+
+        return false;
+    }
+
+    private function loginWithSeededUser(): mixed
     {
         try {
             $userModel = config('auth.providers.users.model', \App\Models\User::class);
 
             if (!class_exists($userModel)) {
-                return;
+                return null;
             }
 
             $user = method_exists($userModel, 'factory')
@@ -275,9 +329,12 @@ final readonly class ExecutionReturnTypeResolver
 
             if ($user !== null) {
                 Auth::setUser($user);
+                return $user;
             }
         } catch (Throwable) {
         }
+
+        return null;
     }
 
     private static function jsonValueToTypeString(mixed $value): string

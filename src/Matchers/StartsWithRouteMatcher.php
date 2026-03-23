@@ -13,6 +13,6 @@ final readonly class StartsWithRouteMatcher implements RouteMatcher
 
     public function matches(string $fullUri, string $pattern): bool
     {
-        return self::ANY === $pattern || Str::startsWith($fullUri, $pattern);
+        return self::ANY === $pattern || Str::startsWith($fullUri, ltrim($pattern, '/'));
     }
 }

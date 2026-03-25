@@ -28,6 +28,10 @@
     "php": "^8.2",
     "laravel/framework": "^v11.15|^12.0"
   },
+  "suggest": {
+    "spatie/laravel-data": "Required to resolve Data class request/response types for routes.",
+    "spatie/laravel-typescript-transformer": "Required to resolve TypeScript types from the generated output file."
+  },
   "require-dev": {
     "phpunit/phpunit": "^11",
     "orchestra/testbench": "^9|^10",

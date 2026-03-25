@@ -38,9 +38,4 @@ final readonly class RouteServiceExporter
         }
     }
 
-    public function isFileExists(): bool
-    {
-        $libraryService = join_paths($this->config->libraryPath(), 'stoli.js');
-        return $this->filesystem->exists($libraryService);
-    }
 }

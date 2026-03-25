@@ -11,7 +11,6 @@ use StubbeDev\LaravelStoli\Publisher;
 class StoliGenerateCommand extends Command
 {
     protected $signature = 'stoli:generate
-        {--F|force    : Force re-publish the runtime library files}
         {--type-check : Run tsc --noEmit after generation to validate the generated TypeScript}';
 
     protected $description = 'Publish the route files for the Laravel Stoli library';
@@ -19,9 +18,7 @@ class StoliGenerateCommand extends Command
     public function handle(Publisher $publisher): int
     {
         try {
-            $publisher->publish(
-                overrideLibrary: (bool) $this->option('force'),
-            );
+            $publisher->publish();
             $this->info('Routes published');
         } catch (StoliException $exception) {
             $this->error('Sorry we have an exception: ' . $exception->getMessage());

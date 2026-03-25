@@ -18,19 +18,10 @@ final readonly class Publisher
     {
     }
 
-    public function publish(bool $overrideLibrary): void
+    public function publish(): void
     {
-        $this->createLibrary($overrideLibrary);
+        $this->routeServiceExporter->publish();
         $this->routesFileExporter->publish();
         $this->axiosRouterExporter->publish();
-    }
-
-    private function createLibrary(bool $override): void
-    {
-        if (!$override && $this->routeServiceExporter->isFileExists()) {
-            return;
-        }
-
-        $this->routeServiceExporter->publish();
     }
 }

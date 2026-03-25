@@ -142,12 +142,15 @@ final readonly class SpatieDataTypeResolver
      *     is used as the type name and an `import type` statement is emitted.
      *     `ambient` is set to false.
      *
+     * The output file path is read from the `TypeScriptTransformerConfig` singleton
+     * bound by spatie/laravel-typescript-transformer v3 via `GlobalNamespaceWriter::$path`.
+     *
      * @return array{type: string, file: string, ambient: bool}|null
      */
     private function lookupTransformerType(string $dataClass): ?array
     {
         try {
-            $outputFile = config('typescript-transformer.output_file');
+            $outputFile = $this->resolveOutputFileFromContainer();
 
             if (!is_string($outputFile) || !file_exists($outputFile)) {
                 return null;
@@ -187,5 +190,50 @@ final readonly class SpatieDataTypeResolver
         }
 
         return null;
+    }
+
+    /**
+     * Attempt to derive the output file path from the TypeScriptTransformerConfig
+     * singleton bound by spatie/laravel-typescript-transformer v3.
+     *
+     * The config exposes `$typesWriter`; if it is a GlobalNamespaceWriter we can
+     * read its protected `$path` property via reflection to get the exact file the
+     * transformer will write to.  For any other Writer implementation we fall back
+     * to `$outputDirectory/index.d.ts`.
+     *
+     * Returns null if the package is not installed or the binding is absent.
+     */
+    private function resolveOutputFileFromContainer(): ?string
+    {
+        if (!class_exists('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig')) {
+            return null;
+        }
+
+        try {
+            $config = app('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig');
+        } catch (Throwable) {
+            return null;
+        }
+
+        // Prefer reading the exact path off the writer via reflection.
+        if (isset($config->typesWriter) && $config->typesWriter instanceof \Spatie\TypeScriptTransformer\Writers\GlobalNamespaceWriter) {
+            try {
+                $prop = new \ReflectionProperty($config->typesWriter, 'path');
+                $prop->setAccessible(true);
+                $path = $prop->getValue($config->typesWriter);
+
+                if (is_string($path) && $path !== '') {
+                    return $path;
+                }
+            } catch (Throwable) {
+            }
+        }
+
+        // Fall back to the output directory + conventional filename.
+        if (!isset($config->outputDirectory)) {
+            return null;
+        }
+
+        return rtrim($config->outputDirectory, '/\\') . DIRECTORY_SEPARATOR . 'index.d.ts';
     }
 }

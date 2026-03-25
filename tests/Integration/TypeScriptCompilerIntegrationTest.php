@@ -26,8 +26,8 @@ final class TypeScriptCompilerIntegrationTest extends TestCase
 
     private function compile(): string
     {
-        $builder  = static::create(FileRouteBuilder::class);
-        $compiler = new TypeScriptFileCompiler(new JsonFileCompiler(), new ConstraintTypeMapper());
+        $builder = self::create(FileRouteBuilder::class);
+        $compiler = new TypeScriptFileCompiler(new JsonFileCompiler, new ConstraintTypeMapper);
 
         /** @var File $file */
         $file = $builder->files()->values()[0];

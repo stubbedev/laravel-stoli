@@ -5,20 +5,18 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli\Exporters;
 
 use Illuminate\Filesystem\Filesystem;
-use Throwable;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\StoliException;
+use Throwable;
 
 use function Illuminate\Filesystem\join_paths;
 
 final readonly class RouteServiceExporter
 {
     public function __construct(
-        private Filesystem  $filesystem,
+        private Filesystem $filesystem,
         private StoliConfig $config,
-    )
-    {
-    }
+    ) {}
 
     public function publish(): void
     {
@@ -37,5 +35,4 @@ final readonly class RouteServiceExporter
             throw StoliException::cantOverrideLibrary($error);
         }
     }
-
 }

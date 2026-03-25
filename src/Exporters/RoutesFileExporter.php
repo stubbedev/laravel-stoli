@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli\Exporters;
 
 use Illuminate\Filesystem\Filesystem;
-use Throwable;
+use Spatie\TypeScriptTransformer\Formatters\Formatter;
 use StubbeDev\LaravelStoli\Compilers\JsonFileCompiler;
 use StubbeDev\LaravelStoli\Compilers\TypeScriptFileCompiler;
 use StubbeDev\LaravelStoli\FileRouteBuilder;
 use StubbeDev\LaravelStoli\Items\File;
+use StubbeDev\LaravelStoli\Normalizers\Normalizer;
 use StubbeDev\LaravelStoli\RouteHashCache;
 use StubbeDev\LaravelStoli\StoliException;
-use StubbeDev\LaravelStoli\Normalizers\Normalizer;
+use Throwable;
 
 use function Illuminate\Filesystem\join_paths;
 
@@ -21,12 +22,12 @@ final readonly class RoutesFileExporter
     private TypeScriptFileCompiler $compiler;
 
     public function __construct(
-        private Normalizer       $filesNormalizer,
-        private Filesystem       $filesystem,
+        private Normalizer $filesNormalizer,
+        private Filesystem $filesystem,
         private FileRouteBuilder $fileRouteBuilder,
-        private RouteHashCache   $hashCache,
-    )
-    {
+        private RouteHashCache $hashCache,
+        private ?Formatter $formatter = null,
+    ) {
         $this->compiler = new TypeScriptFileCompiler(new JsonFileCompiler());
     }
 
@@ -48,10 +49,13 @@ final readonly class RoutesFileExporter
             }
 
             $this->filesystem->makeDirectory($file->path(), 0755, true, true);
-            $this->filesystem->put(
-                join_paths($file->path(), "{$file->name()}.{$this->compiler->extension()}"),
-                $content
-            );
+
+            $filePath = join_paths($file->path(), "{$file->name()}.{$this->compiler->extension()}");
+
+            $this->filesystem->put($filePath, $content);
+
+            $absolutePath = str_starts_with($filePath, '/') ? $filePath : base_path($filePath);
+            $this->formatter?->format([$absolutePath]);
 
             $this->hashCache->record($file, $content);
         } catch (Throwable $error) {

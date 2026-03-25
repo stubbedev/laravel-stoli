@@ -6,9 +6,7 @@ namespace StubbeDev\LaravelStoli;
 
 final class StoliConfig
 {
-    public function __construct(private readonly array $config)
-    {
-    }
+    public function __construct(private readonly array $config) {}
 
     public function libraryPath(): string
     {

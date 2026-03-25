@@ -18,7 +18,7 @@ final class TypeScriptFileCompilerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->compiler = new TypeScriptFileCompiler(new JsonFileCompiler(), new ConstraintTypeMapper());
+        $this->compiler = new TypeScriptFileCompiler(new JsonFileCompiler, new ConstraintTypeMapper);
     }
 
     // -------------------------------------------------------------------------
@@ -31,25 +31,25 @@ final class TypeScriptFileCompilerTest extends TestCase
     }
 
     private static function makeRoute(
-        string  $name,
-        string  $uri,
-        array   $wheres = [],
-        array   $methods = ['GET', 'HEAD'],
+        string $name,
+        string $uri,
+        array $wheres = [],
+        array $methods = ['GET', 'HEAD'],
         ?string $stripPrefix = null,
-        ?array  $dataRequestType = null,
-        ?array  $dataResponseType = null,
+        ?array $dataRequestType = null,
+        ?array $dataResponseType = null,
     ): Route {
         return new Route(
-            name:             $name,
-            rootUrl:          'http://localhost',
-            uri:              $uri,
-            prefix:           null,
-            absolute:         false,
-            host:             null,
-            wheres:           $wheres,
-            methods:          $methods,
-            stripPrefix:      $stripPrefix,
-            dataRequestType:  $dataRequestType,
+            name: $name,
+            rootUrl: 'http://localhost',
+            uri: $uri,
+            prefix: null,
+            absolute: false,
+            host: null,
+            wheres: $wheres,
+            methods: $methods,
+            stripPrefix: $stripPrefix,
+            dataRequestType: $dataRequestType,
             dataResponseType: $dataResponseType,
         );
     }
@@ -60,7 +60,7 @@ final class TypeScriptFileCompilerTest extends TestCase
 
     public function test_compile_produces_const_routes_block(): void
     {
-        $file   = self::makeFile('api', [
+        $file = self::makeFile('api', [
             self::makeRoute('users.list', 'api/users'),
         ]);
         $output = $this->compiler->compile($file);
@@ -71,7 +71,7 @@ final class TypeScriptFileCompilerTest extends TestCase
 
     public function test_compile_produces_route_params_interface(): void
     {
-        $file   = self::makeFile('api', [
+        $file = self::makeFile('api', [
             self::makeRoute('users.list', 'api/users'),
         ]);
         $output = $this->compiler->compile($file);
@@ -82,7 +82,7 @@ final class TypeScriptFileCompilerTest extends TestCase
 
     public function test_compile_produces_route_name_type(): void
     {
-        $file   = self::makeFile('api', [
+        $file = self::makeFile('api', [
             self::makeRoute('users.list', 'api/users'),
         ]);
         $output = $this->compiler->compile($file);
@@ -106,7 +106,7 @@ final class TypeScriptFileCompilerTest extends TestCase
 
     public function test_method_type_is_never_when_no_routes_for_method(): void
     {
-        $file   = self::makeFile('api', [
+        $file = self::makeFile('api', [
             self::makeRoute('users.list', 'api/users', methods: ['GET', 'HEAD']),
         ]);
         $output = $this->compiler->compile($file);
@@ -120,7 +120,7 @@ final class TypeScriptFileCompilerTest extends TestCase
 
     public function test_uri_params_appear_in_params_interface(): void
     {
-        $file   = self::makeFile('api', [
+        $file = self::makeFile('api', [
             self::makeRoute('users.show', 'api/users/{id}'),
         ]);
         $output = $this->compiler->compile($file);
@@ -131,7 +131,7 @@ final class TypeScriptFileCompilerTest extends TestCase
 
     public function test_optional_uri_param_is_not_required(): void
     {
-        $file   = self::makeFile('api', [
+        $file = self::makeFile('api', [
             self::makeRoute('posts.show', 'api/posts/{slug?}'),
         ]);
         $output = $this->compiler->compile($file);
@@ -140,9 +140,9 @@ final class TypeScriptFileCompilerTest extends TestCase
         self::assertStringContainsString('slug?:', $output);
     }
 
-    public function test_whereNumber_constraint_produces_number_type(): void
+    public function test_where_number_constraint_produces_number_type(): void
     {
-        $file   = self::makeFile('api', [
+        $file = self::makeFile('api', [
             self::makeRoute('users.show', 'api/users/{id}', wheres: ['id' => '[0-9]+']),
         ]);
         $output = $this->compiler->compile($file);
@@ -150,9 +150,9 @@ final class TypeScriptFileCompilerTest extends TestCase
         self::assertStringContainsString('id: number', $output);
     }
 
-    public function test_whereIn_constraint_produces_union_literals(): void
+    public function test_where_in_constraint_produces_union_literals(): void
     {
-        $file   = self::makeFile('api', [
+        $file = self::makeFile('api', [
             self::makeRoute('items.show', 'api/items/{type}', wheres: ['type' => 'foo|bar']),
         ]);
         $output = $this->compiler->compile($file);
@@ -227,7 +227,7 @@ final class TypeScriptFileCompilerTest extends TestCase
         ]);
         $output = $this->compiler->compile($file);
 
-        self::assertStringContainsString("import type { StoreUserRequestData }", $output);
+        self::assertStringContainsString('import type { StoreUserRequestData }', $output);
     }
 
     // -------------------------------------------------------------------------
@@ -306,7 +306,7 @@ final class TypeScriptFileCompilerTest extends TestCase
         ]);
         $output = $this->compiler->compile($file);
 
-        self::assertStringContainsString("import type { ApiResponseData }", $output);
+        self::assertStringContainsString('import type { ApiResponseData }', $output);
     }
 
     // -------------------------------------------------------------------------
@@ -364,7 +364,7 @@ final class TypeScriptFileCompilerTest extends TestCase
 
     public function test_empty_file_compiles_without_error(): void
     {
-        $file   = self::makeFile('api', []);
+        $file = self::makeFile('api', []);
         $output = $this->compiler->compile($file);
 
         self::assertStringContainsString('const routes =', $output);

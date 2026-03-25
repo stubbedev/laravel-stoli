@@ -14,17 +14,19 @@ abstract class SecureList extends AbstractList
         parent::__construct($items);
     }
 
-    abstract static public function type(): string;
+    abstract public static function type(): string;
 
     public function merge(AbstractList $list): static
     {
         static::ensureTypesOf($list->items());
+
         return parent::merge($list);
     }
 
     public function overlay(AbstractList $list): static
     {
         static::ensureTypesOf($list->items());
+
         return parent::overlay($list);
     }
 
@@ -38,7 +40,7 @@ abstract class SecureList extends AbstractList
                 ? gettype($item) === $type
                 : $item instanceof $type;
 
-            if (!$valid) {
+            if (! $valid) {
                 throw new InvalidSafelistItem(static::class, $type, $this->valueToString($item));
             }
         }

@@ -28,7 +28,7 @@ final class StoliException extends RuntimeException
     public static function cantOverrideLibrary(?Throwable $previous = null): self
     {
         $errorMessage = $previous?->getMessage() ?? 'unknown';
+
         return new self("Could not override library: $errorMessage", $previous?->getCode() ?? 0, $previous);
     }
-
 }

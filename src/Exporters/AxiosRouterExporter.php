@@ -6,42 +6,41 @@ namespace StubbeDev\LaravelStoli\Exporters;
 
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
-use Throwable;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\StoliException;
+use Throwable;
 
 use function Illuminate\Filesystem\join_paths;
 
 final readonly class AxiosRouterExporter
 {
     public function __construct(
-        private Filesystem  $filesystem,
+        private Filesystem $filesystem,
         private StoliConfig $config,
-    )
-    {
-    }
+    ) {}
 
     public function publish(): void
     {
-        if (!$this->config->axiosRouter()) {
+        if (! $this->config->axiosRouter()) {
             return;
         }
 
-        if (!$this->config->splitModulesInFiles()) {
+        if (! $this->config->splitModulesInFiles()) {
             $this->generate(
                 $this->config->defaultSingleFileModuleName(),
                 $this->config->defaultSingleFileOutputPath(),
                 'router.ts',
             );
+
             return;
         }
 
-        $modules  = $this->config->modules();
+        $modules = $this->config->modules();
         $multiple = count($modules) > 1;
 
         foreach ($modules as $module) {
-            $name     = $module['name'];
-            $path     = $module['path'] ?? $this->config->libraryPath();
+            $name = $module['name'];
+            $path = $module['path'] ?? $this->config->libraryPath();
             $filename = $multiple ? "{$name}.router.ts" : 'router.ts';
             $this->generate($name, $path, $filename);
         }

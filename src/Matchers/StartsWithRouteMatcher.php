@@ -9,10 +9,10 @@ use StubbeDev\LaravelStoli\RouteMatcher;
 
 final readonly class StartsWithRouteMatcher implements RouteMatcher
 {
-    const ANY = '*';
+    private const string ANY = '*';
 
     public function matches(string $fullUri, string $pattern): bool
     {
-        return self::ANY === $pattern || Str::startsWith($fullUri, ltrim($pattern, '/'));
+        return $pattern === self::ANY || Str::startsWith($fullUri, ltrim($pattern, '/'));
     }
 }

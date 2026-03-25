@@ -12,11 +12,9 @@ final readonly class Publisher
 {
     public function __construct(
         private RouteServiceExporter $routeServiceExporter,
-        private RoutesFileExporter   $routesFileExporter,
-        private AxiosRouterExporter  $axiosRouterExporter,
-    )
-    {
-    }
+        private RoutesFileExporter $routesFileExporter,
+        private AxiosRouterExporter $axiosRouterExporter,
+    ) {}
 
     public function publish(): void
     {

@@ -14,7 +14,8 @@ final readonly class Utils
     public static function jsonEncode(array $data): string
     {
         $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        return preg_replace_callback('/^( {4})+/m', fn($m) => str_repeat("\t", strlen($m[0]) / 4), $json);
+
+        return preg_replace_callback('/^( {4})+/m', fn ($m) => str_repeat("\t", strlen($m[0]) / 4), $json);
     }
 
     public static function removeForwardSlashes(?string $fragment): string

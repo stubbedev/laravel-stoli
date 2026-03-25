@@ -21,9 +21,9 @@ final class StripPrefixTest extends TestCase
     {
         return [
             [
-                'match'       => 'api/store',
-                'name'        => 'store',
-                'path'        => 'resources/routes',
+                'match' => 'api/store',
+                'name' => 'store',
+                'path' => 'resources/routes',
                 'stripPrefix' => 'store.',
             ],
         ];
@@ -31,11 +31,11 @@ final class StripPrefixTest extends TestCase
 
     public function test_route_names_have_prefix_stripped(): void
     {
-        $builder  = static::create(FileRouteBuilder::class);
-        $compiler = new TypeScriptFileCompiler(new JsonFileCompiler(), new ConstraintTypeMapper());
+        $builder = self::create(FileRouteBuilder::class);
+        $compiler = new TypeScriptFileCompiler(new JsonFileCompiler, new ConstraintTypeMapper);
 
         /** @var File $file */
-        $file   = $builder->files()->values()[0];
+        $file = $builder->files()->values()[0];
         $output = $compiler->compile($file);
 
         // Should appear without the 'store.' prefix

@@ -31,7 +31,7 @@ return [
     |         named using the 'single.name' option below.
     |
     */
-    'split'   => true,
+    'split' => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -45,7 +45,7 @@ return [
     | Requires axios to be installed: npm install axios
     |
     */
-    'axios'   => false,
+    'axios' => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -62,7 +62,7 @@ return [
     |        it falls back to the global 'library' path defined above.
     |
     */
-    'single'  => [
+    'single' => [
         'name' => 'api',
         'path' => 'resources/routes',
     ],
@@ -87,7 +87,7 @@ return [
             | or provide a specific path to match (e.g., '/api') to filter routes.
             |
             */
-            'match'    => '*',
+            'match' => '*',
 
             /*
             |--------------------------------------------------------------------------
@@ -97,7 +97,7 @@ return [
             | The name of the module and the resulting TypeScript file.
             |
             */
-            'name'     => 'api',
+            'name' => 'api',
 
             /*
             |--------------------------------------------------------------------------
@@ -110,7 +110,7 @@ return [
             | variable defined in your .env file. If neither is set, URLs will not be absolute.
             |
             */
-            'rootUrl'  => env('APP_URL', 'http://localhost'),
+            'rootUrl' => env('APP_URL', 'http://localhost'),
 
             /*
             |--------------------------------------------------------------------------
@@ -134,7 +134,7 @@ return [
             | By default, this value is null, meaning no prefix will be added.
             |
             */
-            'prefix'   => null,
+            'prefix' => null,
 
             /*
             |--------------------------------------------------------------------------
@@ -145,7 +145,7 @@ return [
             | will be stored. If omitted, it falls back to the global 'library' path.
             |
             */
-            'path'        => 'resources/routes',
+            'path' => 'resources/routes',
 
             /*
             |--------------------------------------------------------------------------
@@ -161,5 +161,5 @@ return [
             */
             'stripPrefix' => null,
         ],
-    ]
+    ],
 ];

@@ -30,11 +30,11 @@ trait ValueStringify
         }
 
         if (is_scalar($value)) {
-            return (string)$value;
+            return (string) $value;
         }
 
         if (is_resource($value)) {
-            return '(' . get_resource_type($value) . ' resource #' . (int)$value . ')';
+            return '('.get_resource_type($value).' resource #'.(int) $value.')';
         }
 
         if ($value instanceof Stringable) {

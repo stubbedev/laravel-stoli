@@ -140,9 +140,9 @@ abstract class AbstractList implements Countable, IteratorAggregate
         return null;
     }
 
-    public function unique(callable $mapper = null): static
+    public function unique(?callable $mapper = null): static
     {
-        if (null === $mapper) {
+        if ($mapper === null) {
             return new static(array_unique($this->items(), SORT_REGULAR));
         }
 
@@ -154,17 +154,18 @@ abstract class AbstractList implements Countable, IteratorAggregate
             }
 
             $exists[] = $value;
+
             return true;
         });
     }
 
-    public function duplicates(callable $mapper = null): ArrayList
+    public function duplicates(?callable $mapper = null): ArrayList
     {
-        $items   = null === $mapper ? new ArrayList($this) : $this->map($mapper);
+        $items = $mapper === null ? new ArrayList($this) : $this->map($mapper);
         $uniques = $items->unique()->items();
 
         return $items->filter(
-            static fn(mixed $element, int|string $key) => !isset($uniques[$key]) || $uniques[$key] != $element
+            static fn (mixed $element, int|string $key) => ! isset($uniques[$key]) || $uniques[$key] != $element
         );
     }
 

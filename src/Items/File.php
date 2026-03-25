@@ -9,12 +9,10 @@ use StubbeDev\LaravelStoli\Support\ArrayList;
 final readonly class File
 {
     public function __construct(
-        private string    $name,
-        private string    $path,
+        private string $name,
+        private string $path,
         private ArrayList $routes
-    )
-    {
-    }
+    ) {}
 
     public static function from(Module $module, ArrayList $routes): self
     {

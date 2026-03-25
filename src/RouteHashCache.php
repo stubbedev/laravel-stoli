@@ -29,7 +29,7 @@ final readonly class RouteHashCache
     private function cachePath(): string
     {
         // __DIR__ is src/ — one level up is the package root inside vendor/
-        return dirname(__DIR__) . '/.cache';
+        return dirname(__DIR__).'/.cache';
     }
 
     /**
@@ -38,9 +38,9 @@ final readonly class RouteHashCache
      */
     public function isUnchanged(File $file, string $content): bool
     {
-        $key      = $this->key($file);
-        $hash     = hash('sha256', $content);
-        $onDisk   = join_paths($file->path(), $file->name() . '.ts');
+        $key = $this->key($file);
+        $hash = hash('sha256', $content);
+        $onDisk = join_paths($file->path(), $file->name().'.ts');
 
         return isset($this->stored[$key])
             && $this->stored[$key] === $hash
@@ -52,8 +52,8 @@ final readonly class RouteHashCache
      */
     public function record(File $file, string $content): void
     {
-        $key   = $this->key($file);
-        $hash  = hash('sha256', $content);
+        $key = $this->key($file);
+        $hash = hash('sha256', $content);
         $fresh = array_merge($this->stored, [$key => $hash]);
 
         $this->persist($fresh);
@@ -61,19 +61,20 @@ final readonly class RouteHashCache
 
     private function key(File $file): string
     {
-        return $file->path() . '/' . $file->name();
+        return $file->path().'/'.$file->name();
     }
 
     private function load(): array
     {
         $path = $this->cachePath();
 
-        if (!$this->filesystem->exists($path)) {
+        if (! $this->filesystem->exists($path)) {
             return [];
         }
 
         try {
             $decoded = json_decode($this->filesystem->get($path), true, flags: JSON_THROW_ON_ERROR);
+
             return is_array($decoded) ? $decoded : [];
         } catch (\Throwable) {
             return [];

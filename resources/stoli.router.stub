@@ -17,7 +17,7 @@ const routeService = new RouteService({ routes });
 
 function buildUrl<N extends keyof {{STUDLY}}RouteParams>(routeName: N, params: {{STUDLY}}RouteParams[N]): [string, Record<string, unknown>] {
 	const remaining = { ...params } as Record<string, unknown>;
-	const url = routeService.createURLWithoutQuery(routeName as string, remaining);
+	const url = routeService.createURLWithoutQuery(routeName as keyof typeof routes & string, remaining);
 	return [url, remaining];
 }
 

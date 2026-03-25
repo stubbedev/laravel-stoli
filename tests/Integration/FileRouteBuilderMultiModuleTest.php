@@ -20,22 +20,22 @@ final class FileRouteBuilderMultiModuleTest extends TestCase
 
     public function test_returns_two_files_for_two_modules(): void
     {
-        $builder = static::create(FileRouteBuilder::class);
-        $files   = $builder->files();
+        $builder = self::create(FileRouteBuilder::class);
+        $files = $builder->files();
 
         self::assertSame(2, $files->count());
     }
 
     public function test_store_module_only_contains_store_routes(): void
     {
-        $builder = static::create(FileRouteBuilder::class);
-        $files   = $builder->files();
+        $builder = self::create(FileRouteBuilder::class);
+        $files = $builder->files();
 
-        $storeFile = $files->filter(fn(File $f) => $f->name() === 'store')->values()[0] ?? null;
+        $storeFile = $files->filter(fn (File $f) => $f->name() === 'store')->values()[0] ?? null;
 
         self::assertNotNull($storeFile);
 
-        $names = $storeFile->routes()->map(fn($r) => $r->name())->values();
+        $names = $storeFile->routes()->map(fn ($r) => $r->name())->values();
 
         foreach ($names as $name) {
             self::assertStringStartsWith('store.', $name);
@@ -44,14 +44,14 @@ final class FileRouteBuilderMultiModuleTest extends TestCase
 
     public function test_admin_module_only_contains_admin_routes(): void
     {
-        $builder = static::create(FileRouteBuilder::class);
-        $files   = $builder->files();
+        $builder = self::create(FileRouteBuilder::class);
+        $files = $builder->files();
 
-        $adminFile = $files->filter(fn(File $f) => $f->name() === 'admin')->values()[0] ?? null;
+        $adminFile = $files->filter(fn (File $f) => $f->name() === 'admin')->values()[0] ?? null;
 
         self::assertNotNull($adminFile);
 
-        $names = $adminFile->routes()->map(fn($r) => $r->name())->values();
+        $names = $adminFile->routes()->map(fn ($r) => $r->name())->values();
 
         foreach ($names as $name) {
             self::assertStringStartsWith('admin.', $name);

@@ -11,22 +11,20 @@ use function array_filter;
 readonly class Route
 {
     public function __construct(
-        private string  $name,
-        private string  $rootUrl,
-        private string  $uri,
+        private string $name,
+        private string $rootUrl,
+        private string $uri,
         private ?string $prefix,
-        private bool    $absolute,
+        private bool $absolute,
         private ?string $host,
-        private array   $wheres = [],
-        private array   $methods = [],
+        private array $wheres = [],
+        private array $methods = [],
         private ?string $stripPrefix = null,
         /** @var array{type: string, file: string}|null */
-        private ?array  $dataRequestType = null,
+        private ?array $dataRequestType = null,
         /** @var array{type: string, file: string}|null */
-        private ?array  $dataResponseType = null,
-    )
-    {
-    }
+        private ?array $dataResponseType = null,
+    ) {}
 
     public function name(): string
     {
@@ -51,7 +49,7 @@ readonly class Route
     {
         $segments = array_filter([
             Utils::removeForwardSlashes($this->prefix),
-            Utils::removeForwardSlashes($this->uri)
+            Utils::removeForwardSlashes($this->uri),
         ]);
 
         return implode('/', $segments);
@@ -87,7 +85,7 @@ readonly class Route
     {
         return [
             'host' => $this->host(),
-            'uri'  => $this->uri(),
+            'uri' => $this->uri(),
         ];
     }
 }

@@ -11,11 +11,9 @@ use StubbeDev\LaravelStoli\Items\Route;
 final readonly class TypeScriptFileCompiler implements Compiler
 {
     public function __construct(
-        private JsonFileCompiler     $jsonFileGenerator,
+        private JsonFileCompiler $jsonFileGenerator,
         private ConstraintTypeMapper $constraintTypeMapper = new ConstraintTypeMapper(),
-    )
-    {
-    }
+    ) {}
 
     public function compile(File $file): string
     {
@@ -43,9 +41,7 @@ final readonly class TypeScriptFileCompiler implements Compiler
 
     private static function template(string $module, string $routes, string $paramsInterface, string $responseInterface, string $methodNameTypes, string $imports = ''): string
     {
-        $middle = $responseInterface !== ''
-            ? "$paramsInterface\n\n$responseInterface"
-            : $paramsInterface;
+        $middle = "$paramsInterface\n\n$responseInterface";
 
         $importBlock = $imports !== '' ? "$imports\n\n" : '';
 
@@ -66,6 +62,7 @@ final readonly class TypeScriptFileCompiler implements Compiler
     {
         $entries = $file->routes()->reduce(function (array $acc, Route $route): array {
             $acc[$route->name()] = "\t'{$route->name()}': " . $this->buildParamTypeForRoute($route) . ';';
+
             return $acc;
         }, []);
 
@@ -76,8 +73,8 @@ final readonly class TypeScriptFileCompiler implements Compiler
 
     private function buildParamTypeForRoute(Route $route): string
     {
-        $uriParams      = $this->extractUriParams($route->uri(), $route->wheres());
-        $dataRequest    = $route->dataRequestType();
+        $uriParams = $this->extractUriParams($route->uri(), $route->wheres());
+        $dataRequest = $route->dataRequestType();
 
         // When there is a Data request type, URI params that match a field in the
         // Data class are dropped — the Data type takes precedence.  Remaining URI
@@ -89,6 +86,7 @@ final readonly class TypeScriptFileCompiler implements Compiler
             }
 
             $uriBlock = self::buildUriParamType($uriParams);
+
             return "{$uriBlock} & {$dataRequest['type']}";
         }
 
@@ -102,10 +100,10 @@ final readonly class TypeScriptFileCompiler implements Compiler
 
         $params = [];
         foreach ($matches as $match) {
-            $name     = $match[1];
+            $name = $match[1];
             $constraint = $wheres[$name] ?? null;
             $params[$name] = [
-                'type'     => $constraint !== null
+                'type' => $constraint !== null
                     ? $this->constraintTypeMapper->map($constraint)
                     : 'string | number',
                 'required' => empty($match[2]),
@@ -124,8 +122,8 @@ final readonly class TypeScriptFileCompiler implements Compiler
         $properties = [];
 
         foreach ($params as $name => $info) {
-            $optional      = $info['required'] ? '' : '?';
-            $properties[]  = "$name$optional: {$info['type']}";
+            $optional = $info['required'] ? '' : '?';
+            $properties[] = "$name$optional: {$info['type']}";
         }
 
         $properties[] = '[key: string]: unknown';
@@ -146,10 +144,6 @@ final readonly class TypeScriptFileCompiler implements Compiler
 
             return $acc;
         }, []);
-
-        if (empty($entries)) {
-            return '';
-        }
 
         $body = implode("\n", $entries);
 
@@ -216,6 +210,7 @@ final readonly class TypeScriptFileCompiler implements Compiler
                     $acc[$typeInfo['file']][] = $typeInfo['type'];
                 }
             }
+
             return $acc;
         }, []);
 
@@ -224,10 +219,10 @@ final readonly class TypeScriptFileCompiler implements Compiler
         }
 
         $fromDir = base_path(rtrim($file->path(), '/'));
-        $lines   = [];
+        $lines = [];
 
         foreach ($byFile as $absFile => $types) {
-            $rel   = self::relativeImportPath($fromDir, $absFile);
+            $rel = self::relativeImportPath($fromDir, $absFile);
             $names = implode(', ', array_unique($types));
             $lines[] = "import type { $names } from '$rel';";
         }
@@ -244,20 +239,20 @@ final readonly class TypeScriptFileCompiler implements Compiler
         // Strip TS extensions — TypeScript resolves the file without them
         $toFile = preg_replace('/\.d\.ts$|\.ts$/', '', $toFile);
 
-        $from = array_values(array_filter(explode('/', $fromDir), fn($p) => $p !== ''));
-        $to   = array_values(array_filter(explode('/', $toFile), fn($p) => $p !== ''));
+        $from = array_values(array_filter(explode('/', $fromDir), fn ($p) => $p !== ''));
+        $to = array_values(array_filter(explode('/', $toFile), fn ($p) => $p !== ''));
 
         $common = 0;
-        $max    = min(count($from), count($to));
+        $max = min(count($from), count($to));
 
         while ($common < $max && $from[$common] === $to[$common]) {
             $common++;
         }
 
-        $ups   = count($from) - $common;
+        $ups = count($from) - $common;
         $downs = array_slice($to, $common);
         $parts = [...array_fill(0, $ups, '..'), ...$downs];
-        $rel   = implode('/', $parts);
+        $rel = implode('/', $parts);
 
         if ($rel === '') {
             return '.';

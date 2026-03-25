@@ -13,9 +13,9 @@ class ArrayList extends AbstractList
         return new static($items);
     }
 
-    public function prepend(mixed $item, string|int $key = null): static
+    public function prepend(mixed $item, string|int|null $key = null): static
     {
-        if (null === $key) {
+        if ($key === null) {
             array_unshift($this->items, $item);
         } else {
             $this->items = [$key => $item] + $this->items;
@@ -24,9 +24,9 @@ class ArrayList extends AbstractList
         return $this;
     }
 
-    public function push(mixed $item, string|int $key = null): static
+    public function push(mixed $item, string|int|null $key = null): static
     {
-        if (null === $key) {
+        if ($key === null) {
             $this->items[] = $item;
         } else {
             $this->items[$key] = $item;

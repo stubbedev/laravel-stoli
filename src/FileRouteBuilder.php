@@ -7,7 +7,8 @@ namespace StubbeDev\LaravelStoli;
 use Closure;
 use Illuminate\Routing\Route as LaravelRoute;
 use Illuminate\Routing\Router as LaravelRouter;
-use StubbeDev\LaravelStoli\Items\{File, Module};
+use StubbeDev\LaravelStoli\Items\File;
+use StubbeDev\LaravelStoli\Items\Module;
 use StubbeDev\LaravelStoli\Items\Route;
 use StubbeDev\LaravelStoli\Support\AbstractList;
 use StubbeDev\LaravelStoli\Support\ArrayList;
@@ -17,20 +18,21 @@ final readonly class FileRouteBuilder
     private ArrayList $laravelRoutes;
 
     public function __construct(
-        LaravelRouter                    $router,
-        private ModulesProvider          $provider,
-        private RouteMatcher             $matcher,
-        private SpatieDataTypeResolver   $dataTypeResolver,
-    )
-    {
+        LaravelRouter $router,
+        private ModulesProvider $provider,
+        private RouteMatcher $matcher,
+        private SpatieDataTypeResolver $dataTypeResolver,
+    ) {
         $this->laravelRoutes = new ArrayList($router->getRoutes()->getRoutes());
     }
 
     public function files(): ArrayList
     {
-        $routes          = $this->laravelRoutes->filter($this->onlyNamed());
-        $modules         = $this->provider->modules();
-        $matches         = $modules->matches();
+        $routes = $this->laravelRoutes
+            ->filter($this->onlyNamed())
+            ->unique(fn (LaravelRoute $route) => $route->getName());
+        $modules = $this->provider->modules();
+        $matches = $modules->matches();
         $routeCollection = $matches->reduce($this->pair($routes), new ArrayList(AbstractList::Empty));
 
         return $this->provider
@@ -40,17 +42,22 @@ final readonly class FileRouteBuilder
 
     private function onlyNamed(): Closure
     {
-        return fn(LaravelRoute $route): bool => $route->getName() != null;
+        return function (LaravelRoute $route): bool {
+            $name = $route->getName();
+
+            return $name !== null && !str_ends_with($name, '.');
+        };
     }
 
     private function pair(ArrayList $routes): callable
     {
         return function (ArrayList $acc, string $match) use ($routes) {
             $filtered = $routes->filter(
-                fn(LaravelRoute $route) => $this->matcher->matches($route->uri(), $match)
+                fn (LaravelRoute $route) => $this->matcher->matches($route->uri(), $match)
             );
 
             $acc->push($filtered, $match);
+
             return $acc;
         };
     }
@@ -73,16 +80,16 @@ final readonly class FileRouteBuilder
             $resolved = $this->dataTypeResolver->resolve($route);
 
             return new Route(
-                name:             $route->getName(),
-                rootUrl:          $module->rootUrl(),
-                uri:              $route->uri(),
-                prefix:           $module->prefix(),
-                absolute:         $module->absolute(),
-                host:             $route->domain(),
-                wheres:           $route->wheres,
-                methods:          $route->methods(),
-                stripPrefix:      $module->stripPrefix(),
-                dataRequestType:  $resolved['request'],
+                name: $route->getName(),
+                rootUrl: $module->rootUrl(),
+                uri: $route->uri(),
+                prefix: $module->prefix(),
+                absolute: $module->absolute(),
+                host: $route->domain(),
+                wheres: $route->wheres,
+                methods: $route->methods(),
+                stripPrefix: $module->stripPrefix(),
+                dataRequestType: $resolved['request'],
                 dataResponseType: $resolved['response'],
             );
         };
@@ -90,6 +97,6 @@ final readonly class FileRouteBuilder
 
     private static function matchedWith(Module $module): callable
     {
-        return static fn(ArrayList $routes, string $prefix) => $prefix === $module->match();
+        return static fn (ArrayList $routes, string $prefix) => $prefix === $module->match();
     }
 }

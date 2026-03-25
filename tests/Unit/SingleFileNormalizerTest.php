@@ -21,12 +21,12 @@ final class SingleFileNormalizerTest extends TestCase
     private static function makeRoute(string $name, string $uri): Route
     {
         return new Route(
-            name:     $name,
-            rootUrl:  'http://localhost',
-            uri:      $uri,
-            prefix:   null,
+            name: $name,
+            rootUrl: 'http://localhost',
+            uri: $uri,
+            prefix: null,
             absolute: false,
-            host:     null,
+            host: null,
         );
     }
 
@@ -38,12 +38,12 @@ final class SingleFileNormalizerTest extends TestCase
     private static function makeStoliConfig(array $overrides = []): StoliConfig
     {
         return new StoliConfig(array_merge([
-            'library'   => 'resources/routes',
-            'split'     => false,
-            'single'    => ['name' => 'api', 'path' => 'resources/routes'],
-            'modules'   => [],
-            'axios'     => false,
-            'resources' => __DIR__ . '/../../resources',
+            'library' => 'resources/routes',
+            'split' => false,
+            'single' => ['name' => 'api', 'path' => 'resources/routes'],
+            'modules' => [],
+            'axios' => false,
+            'resources' => __DIR__.'/../../resources',
         ], $overrides));
     }
 
@@ -84,7 +84,7 @@ final class SingleFileNormalizerTest extends TestCase
         ]);
         $normalizer = new SingleFileNormalizer($config);
 
-        $files  = new ArrayList([self::makeFile('api', [])]);
+        $files = new ArrayList([self::makeFile('api', [])]);
         $result = $normalizer->normalize($files);
 
         /** @var File $merged */
@@ -100,7 +100,7 @@ final class SingleFileNormalizerTest extends TestCase
 
     public function test_multiple_normalizer_is_identity(): void
     {
-        $normalizer = new MultipleFilesNormalizer();
+        $normalizer = new MultipleFilesNormalizer;
 
         $files = new ArrayList([
             self::makeFile('store', []),

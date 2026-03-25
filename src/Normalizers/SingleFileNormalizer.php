@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli\Normalizers;
 
 use StubbeDev\LaravelStoli\Items\File;
+use StubbeDev\LaravelStoli\Items\Route;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\Support\ArrayList;
 
@@ -12,9 +13,7 @@ final readonly class SingleFileNormalizer implements Normalizer
 {
     public function __construct(
         private StoliConfig $config,
-    )
-    {
-    }
+    ) {}
 
     public function normalize(ArrayList $files): ArrayList
     {
@@ -22,8 +21,9 @@ final readonly class SingleFileNormalizer implements Normalizer
             new File(
                 $this->config->defaultSingleFileModuleName(),
                 $this->config->defaultSingleFileOutputPath(),
-                $files->flatMap(static fn(File $file) => $file->routes())
-            )
+                $files->flatMap(static fn (File $file) => $file->routes())
+                    ->unique(static fn (Route $route) => $route->name())
+            ),
         ]);
     }
 }

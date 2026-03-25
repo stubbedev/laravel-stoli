@@ -18,9 +18,9 @@ abstract class TestCase extends BaseTestCase
     {
         $app->make('config')
             ->set('stoli', [
-                'split'   => false,
+                'split' => false,
                 'modules' => static::modules(),
-                ...self::config()
+                ...self::config(),
             ]);
     }
 
@@ -35,25 +35,25 @@ abstract class TestCase extends BaseTestCase
     {
         $router->group(['prefix' => 'api'], function ($router) {
             $router->group(['prefix' => 'store/products'], function ($router) {
-                $router->get('/', static fn() => [])->name('store.products.list');
+                $router->get('/', static fn () => [])->name('store.products.list');
             });
 
             $router->group(['prefix' => 'store/cart'], function ($router) {
-                $router->get('/', static fn() => [])->name('store.cart.show');
-                $router->patch('{product_id}', static fn() => [])->name('store.cart.add');
-                $router->delete('{product_id}', static fn() => [])->name('store.cart.remove');
+                $router->get('/', static fn () => [])->name('store.cart.show');
+                $router->patch('{product_id}', static fn () => [])->name('store.cart.add');
+                $router->delete('{product_id}', static fn () => [])->name('store.cart.remove');
             });
 
             $router->group(['prefix' => 'admin/products'], function ($router) {
-                $router->post('{id}', static fn() => [])->name('admin.products.create');
-                $router->patch('{id}', static fn() => [])->name('admin.products.update');
-                $router->get('{id}', static fn() => [])->name('admin.products.show');
+                $router->post('{id}', static fn () => [])->name('admin.products.create');
+                $router->patch('{id}', static fn () => [])->name('admin.products.update');
+                $router->get('{id}', static fn () => [])->name('admin.products.show');
             });
 
             $router->group(['prefix' => 'admin/users'], function ($router) {
-                $router->get('/', static fn() => [])->name('admin.users.list');
-                $router->post('{id}', static fn() => [])->name('admin.users.create');
-                $router->patch('{id}', static fn() => [])->name('admin.users.update');
+                $router->get('/', static fn () => [])->name('admin.users.list');
+                $router->post('{id}', static fn () => [])->name('admin.users.create');
+                $router->patch('{id}', static fn () => [])->name('admin.users.update');
             });
         });
     }
@@ -65,9 +65,10 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * @template T
-     * @param class-string<T> $service
      *
+     * @param  class-string<T>  $service
      * @return T
+     *
      * @throws BindingResolutionException
      */
     protected static function create(string $service): mixed

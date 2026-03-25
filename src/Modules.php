@@ -10,13 +10,13 @@ use StubbeDev\LaravelStoli\Support\SecureList;
 
 final class Modules extends SecureList
 {
-    static public function type(): string
+    public static function type(): string
     {
         return Module::class;
     }
 
     public function matches(): ArrayList
     {
-        return $this->map(fn(Module $module) => $module->match());
+        return $this->map(fn (Module $module) => $module->match());
     }
 }

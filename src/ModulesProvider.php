@@ -11,9 +11,7 @@ use function config;
 
 final readonly class ModulesProvider
 {
-    public function __construct(private StoliConfig $config)
-    {
-    }
+    public function __construct(private StoliConfig $config) {}
 
     public function modules(): Modules
     {
@@ -28,12 +26,12 @@ final readonly class ModulesProvider
     private function validateDuplicates(ArrayList $modules): void
     {
         $modules->duplicates(self::moduleName())
-                ->some(self::throwException());
+            ->some(self::throwException());
     }
 
     private function createModule(): callable
     {
-        return fn(array $config) => new Module(
+        return fn (array $config) => new Module(
             $config['match'] ?? '*',
             $config['rootUrl'] ?? config('app.url'),
             $config['name'],
@@ -46,11 +44,11 @@ final readonly class ModulesProvider
 
     private static function moduleName(): callable
     {
-        return static fn(array $config) => $config['name'];
+        return static fn (array $config) => $config['name'];
     }
 
     private static function throwException(): callable
     {
-        return static fn(string $name) => throw StoliException::moduleAlreadyExists($name);
+        return static fn (string $name) => throw StoliException::moduleAlreadyExists($name);
     }
 }

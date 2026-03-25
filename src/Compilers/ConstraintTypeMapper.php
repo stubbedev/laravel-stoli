@@ -23,15 +23,15 @@ final class ConstraintTypeMapper
      */
     private const EXACT = [
         // whereNumber()
-        '[0-9]+'                                                                         => 'number',
+        '[0-9]+' => 'number',
         // whereAlpha()
-        '[a-zA-Z]+'                                                                      => 'string',
+        '[a-zA-Z]+' => 'string',
         // whereAlphaNumeric()
-        '[a-zA-Z0-9]+'                                                                   => 'string',
+        '[a-zA-Z0-9]+' => 'string',
         // whereUuid()
-        '[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}'       => 'string',
+        '[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}' => 'string',
         // whereUlid()
-        '[0-7][0-9a-hjkmnp-tv-zA-HJKMNP-TV-Z]{25}'                                      => 'string',
+        '[0-7][0-9a-hjkmnp-tv-zA-HJKMNP-TV-Z]{25}' => 'string',
     ];
 
     public function map(string $regex): string
@@ -47,7 +47,7 @@ final class ConstraintTypeMapper
         // Simple literal alternation (e.g. "users|groups|all", produced by whereIn) → union of string literals.
         if (preg_match('/^[a-zA-Z0-9_-]+(\|[a-zA-Z0-9_-]+)*$/', $regex)) {
             return implode(' | ', array_map(
-                fn(string $v) => "'{$v}'",
+                fn (string $v) => "'{$v}'",
                 explode('|', $regex),
             ));
         }

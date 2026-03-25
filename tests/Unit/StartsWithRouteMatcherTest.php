@@ -13,7 +13,7 @@ final class StartsWithRouteMatcherTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->matcher = new StartsWithRouteMatcher();
+        $this->matcher = new StartsWithRouteMatcher;
     }
 
     public function test_wildcard_matches_any_uri(): void

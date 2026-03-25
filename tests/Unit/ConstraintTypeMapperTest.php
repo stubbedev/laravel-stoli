@@ -13,34 +13,34 @@ final class ConstraintTypeMapperTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->mapper = new ConstraintTypeMapper();
+        $this->mapper = new ConstraintTypeMapper;
     }
 
     // -------------------------------------------------------------------------
     // Exact pattern matches (Laravel named helpers)
     // -------------------------------------------------------------------------
 
-    public function test_whereNumber_maps_to_number(): void
+    public function test_where_number_maps_to_number(): void
     {
         self::assertSame('number', $this->mapper->map('[0-9]+'));
     }
 
-    public function test_whereAlpha_maps_to_string(): void
+    public function test_where_alpha_maps_to_string(): void
     {
         self::assertSame('string', $this->mapper->map('[a-zA-Z]+'));
     }
 
-    public function test_whereAlphaNumeric_maps_to_string(): void
+    public function test_where_alpha_numeric_maps_to_string(): void
     {
         self::assertSame('string', $this->mapper->map('[a-zA-Z0-9]+'));
     }
 
-    public function test_whereUuid_maps_to_string(): void
+    public function test_where_uuid_maps_to_string(): void
     {
         self::assertSame('string', $this->mapper->map('[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}'));
     }
 
-    public function test_whereUlid_maps_to_string(): void
+    public function test_where_ulid_maps_to_string(): void
     {
         self::assertSame('string', $this->mapper->map('[0-7][0-9a-hjkmnp-tv-zA-HJKMNP-TV-Z]{25}'));
     }

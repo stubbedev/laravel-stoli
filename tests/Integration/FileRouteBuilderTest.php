@@ -23,15 +23,15 @@ final class FileRouteBuilderTest extends TestCase
 
     public function test_returns_one_file_per_module(): void
     {
-        $builder = static::create(FileRouteBuilder::class);
-        $files   = $builder->files();
+        $builder = self::create(FileRouteBuilder::class);
+        $files = $builder->files();
 
         self::assertSame(1, $files->count());
     }
 
     public function test_file_contains_named_routes(): void
     {
-        $builder = static::create(FileRouteBuilder::class);
+        $builder = self::create(FileRouteBuilder::class);
 
         /** @var File $file */
         $file = $builder->files()->values()[0];
@@ -42,7 +42,7 @@ final class FileRouteBuilderTest extends TestCase
 
     public function test_file_name_matches_module_name(): void
     {
-        $builder = static::create(FileRouteBuilder::class);
+        $builder = self::create(FileRouteBuilder::class);
 
         /** @var File $file */
         $file = $builder->files()->values()[0];
@@ -52,15 +52,13 @@ final class FileRouteBuilderTest extends TestCase
 
     public function test_route_names_are_preserved(): void
     {
-        $builder = static::create(FileRouteBuilder::class);
+        $builder = self::create(FileRouteBuilder::class);
 
         /** @var File $file */
-        $file  = $builder->files()->values()[0];
-        $names = $file->routes()->map(fn($r) => $r->name())->values();
+        $file = $builder->files()->values()[0];
+        $names = $file->routes()->map(fn ($r) => $r->name())->values();
 
         self::assertContains('store.products.list', $names);
         self::assertContains('admin.users.list', $names);
     }
 }
-
-

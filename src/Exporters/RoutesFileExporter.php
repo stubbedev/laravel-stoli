@@ -30,12 +30,8 @@ final readonly class RoutesFileExporter
         $this->compiler = new TypeScriptFileCompiler(new JsonFileCompiler());
     }
 
-    public function publish(bool $safe = false): void
+    public function publish(): void
     {
-        // Store the safe flag in the app config so ReturnTypeResolver can read it without
-        // needing to be re-instantiated. This is intentionally a short-lived runtime flag.
-        app()->make('config')->set('stoli._safe', $safe);
-
         $this->filesNormalizer
             ->normalize($this->fileRouteBuilder->files())
             ->each($this->export(...));

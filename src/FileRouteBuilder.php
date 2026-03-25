@@ -11,18 +11,16 @@ use StubbeDev\LaravelStoli\Items\{File, Module};
 use StubbeDev\LaravelStoli\Items\Route;
 use StubbeDev\LaravelStoli\Support\AbstractList;
 use StubbeDev\LaravelStoli\Support\ArrayList;
-use StubbeDev\LaravelStoli\ReturnTypeResolver;
 
 final readonly class FileRouteBuilder
 {
     private ArrayList $laravelRoutes;
 
     public function __construct(
-        LaravelRouter                        $router,
-        private ModulesProvider              $provider,
-        private RouteMatcher                 $matcher,
-        private RequestParameterResolver     $parameterResolver,
-        private ReturnTypeResolver           $returnTypeResolver,
+        LaravelRouter                    $router,
+        private ModulesProvider          $provider,
+        private RouteMatcher             $matcher,
+        private SpatieDataTypeResolver   $dataTypeResolver,
     )
     {
         $this->laravelRoutes = new ArrayList($router->getRoutes()->getRoutes());
@@ -71,19 +69,23 @@ final readonly class FileRouteBuilder
 
     private function createRouteFor(Module $module): Closure
     {
-        return fn(LaravelRoute $route): Route => new Route(
-            $route->getName(),
-            $module->rootUrl(),
-            $route->uri(),
-            $module->prefix(),
-            $module->absolute(),
-            $route->domain(),
-            $this->parameterResolver->resolve($route),
-            $this->returnTypeResolver->resolve($route),
-            $route->wheres,
-            $route->methods(),
-            $module->stripPrefix(),
-        );
+        return function (LaravelRoute $route) use ($module): Route {
+            $resolved = $this->dataTypeResolver->resolve($route);
+
+            return new Route(
+                name:             $route->getName(),
+                rootUrl:          $module->rootUrl(),
+                uri:              $route->uri(),
+                prefix:           $module->prefix(),
+                absolute:         $module->absolute(),
+                host:             $route->domain(),
+                wheres:           $route->wheres,
+                methods:          $route->methods(),
+                stripPrefix:      $module->stripPrefix(),
+                dataRequestType:  $resolved['request'],
+                dataResponseType: $resolved['response'],
+            );
+        };
     }
 
     private static function matchedWith(Module $module): callable

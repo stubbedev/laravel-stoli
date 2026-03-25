@@ -34,23 +34,23 @@ final class TypeScriptFileCompilerTest extends TestCase
         string  $name,
         string  $uri,
         array   $wheres = [],
-        ?array  $params = null,
-        ?array  $response = null,
         array   $methods = ['GET', 'HEAD'],
         ?string $stripPrefix = null,
+        ?array  $dataRequestType = null,
+        ?array  $dataResponseType = null,
     ): Route {
         return new Route(
-            name:        $name,
-            rootUrl:     'http://localhost',
-            uri:         $uri,
-            prefix:      null,
-            absolute:    false,
-            host:        null,
-            params:      $params,
-            response:    $response,
-            wheres:      $wheres,
-            methods:     $methods,
-            stripPrefix: $stripPrefix,
+            name:             $name,
+            rootUrl:          'http://localhost',
+            uri:              $uri,
+            prefix:           null,
+            absolute:         false,
+            host:             null,
+            wheres:           $wheres,
+            methods:          $methods,
+            stripPrefix:      $stripPrefix,
+            dataRequestType:  $dataRequestType,
+            dataResponseType: $dataResponseType,
         );
     }
 
@@ -161,36 +161,186 @@ final class TypeScriptFileCompilerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // FormRequest params
+    // Spatie Data request type
     // -------------------------------------------------------------------------
 
-    public function test_form_request_params_appear_in_interface(): void
+    // -------------------------------------------------------------------------
+    // Spatie Data request type — non-ambient (export type)
+    // -------------------------------------------------------------------------
+
+    public function test_data_request_type_appears_in_params_interface(): void
     {
         $file = self::makeFile('api', [
-            self::makeRoute('users.create', 'api/users', params: [
-                'name' => ['type' => 'string', 'required' => true],
-                'age'  => ['type' => 'number', 'required' => false],
-            ], methods: ['POST']),
+            self::makeRoute(
+                'users.create',
+                'api/users',
+                methods: ['POST'],
+                dataRequestType: ['type' => 'StoreUserRequestData', 'file' => '/app/types/generated.ts', 'ambient' => false],
+            ),
         ]);
         $output = $this->compiler->compile($file);
 
-        self::assertStringContainsString('name: string', $output);
-        self::assertStringContainsString('age?: number', $output);
+        self::assertStringContainsString('StoreUserRequestData', $output);
     }
 
-    public function test_form_request_overrides_uri_param_type(): void
+    public function test_data_request_type_without_uri_params_emits_data_type_only(): void
     {
-        // URI has {id} → string | number, but FormRequest says id is 'number'
         $file = self::makeFile('api', [
-            self::makeRoute('users.show', 'api/users/{id}', params: [
-                'id' => ['type' => 'number', 'required' => true],
-            ]),
+            self::makeRoute(
+                'users.create',
+                'api/users',
+                methods: ['POST'],
+                dataRequestType: ['type' => 'StoreUserRequestData', 'file' => '/app/types/generated.ts', 'ambient' => false],
+            ),
         ]);
         $output = $this->compiler->compile($file);
 
-        // Should contain 'number' but NOT 'string | number'
-        self::assertStringContainsString('id: number', $output);
-        self::assertStringNotContainsString('string | number', $output);
+        self::assertStringContainsString("'users.create': StoreUserRequestData", $output);
+        self::assertStringNotContainsString('&', $output);
+    }
+
+    public function test_data_request_type_with_uri_params_emits_intersection(): void
+    {
+        $file = self::makeFile('api', [
+            self::makeRoute(
+                'users.update',
+                'api/users/{userId}',
+                methods: ['PUT'],
+                dataRequestType: ['type' => 'UpdateUserRequestData', 'file' => '/app/types/generated.ts', 'ambient' => false],
+            ),
+        ]);
+        $output = $this->compiler->compile($file);
+
+        self::assertStringContainsString('userId', $output);
+        self::assertStringContainsString('& UpdateUserRequestData', $output);
+    }
+
+    public function test_non_ambient_data_request_type_generates_import(): void
+    {
+        $file = self::makeFile('api', [
+            self::makeRoute(
+                'users.create',
+                'api/users',
+                methods: ['POST'],
+                dataRequestType: ['type' => 'StoreUserRequestData', 'file' => '/app/resources/routes/types/generated.ts', 'ambient' => false],
+            ),
+        ]);
+        $output = $this->compiler->compile($file);
+
+        self::assertStringContainsString("import type { StoreUserRequestData }", $output);
+    }
+
+    // -------------------------------------------------------------------------
+    // Spatie Data request type — ambient (declare namespace)
+    // -------------------------------------------------------------------------
+
+    public function test_ambient_data_request_type_uses_dotted_namespace_path(): void
+    {
+        $file = self::makeFile('api', [
+            self::makeRoute(
+                'users.create',
+                'api/users',
+                methods: ['POST'],
+                dataRequestType: ['type' => 'App.Http.Data.StoreUserRequestData', 'file' => '/app/types/generated.ts', 'ambient' => true],
+            ),
+        ]);
+        $output = $this->compiler->compile($file);
+
+        self::assertStringContainsString('App.Http.Data.StoreUserRequestData', $output);
+    }
+
+    public function test_ambient_data_request_type_does_not_generate_import(): void
+    {
+        $file = self::makeFile('api', [
+            self::makeRoute(
+                'users.create',
+                'api/users',
+                methods: ['POST'],
+                dataRequestType: ['type' => 'App.Http.Data.StoreUserRequestData', 'file' => '/app/types/generated.ts', 'ambient' => true],
+            ),
+        ]);
+        $output = $this->compiler->compile($file);
+
+        self::assertStringNotContainsString('import type', $output);
+    }
+
+    // -------------------------------------------------------------------------
+    // Spatie Data response type — non-ambient (export type)
+    // -------------------------------------------------------------------------
+
+    public function test_data_response_type_appears_in_response_interface(): void
+    {
+        $file = self::makeFile('api', [
+            self::makeRoute(
+                'users.store',
+                'api/users',
+                methods: ['POST'],
+                dataResponseType: ['type' => 'ApiResponseData', 'file' => '/app/types/generated.ts', 'ambient' => false],
+            ),
+        ]);
+        $output = $this->compiler->compile($file);
+
+        self::assertStringContainsString('export interface ApiRouteResponse', $output);
+        self::assertStringContainsString("'users.store': ApiResponseData", $output);
+    }
+
+    public function test_response_interface_is_omitted_when_no_data_response_types(): void
+    {
+        $file = self::makeFile('api', [
+            self::makeRoute('users.list', 'api/users'),
+        ]);
+        $output = $this->compiler->compile($file);
+
+        self::assertStringNotContainsString('export interface ApiRouteResponse', $output);
+    }
+
+    public function test_non_ambient_data_response_type_generates_import(): void
+    {
+        $file = self::makeFile('api', [
+            self::makeRoute(
+                'users.store',
+                'api/users',
+                methods: ['POST'],
+                dataResponseType: ['type' => 'ApiResponseData', 'file' => '/app/resources/routes/types/generated.ts', 'ambient' => false],
+            ),
+        ]);
+        $output = $this->compiler->compile($file);
+
+        self::assertStringContainsString("import type { ApiResponseData }", $output);
+    }
+
+    // -------------------------------------------------------------------------
+    // Spatie Data response type — ambient (declare namespace)
+    // -------------------------------------------------------------------------
+
+    public function test_ambient_data_response_type_uses_dotted_namespace_path(): void
+    {
+        $file = self::makeFile('api', [
+            self::makeRoute(
+                'users.store',
+                'api/users',
+                methods: ['POST'],
+                dataResponseType: ['type' => 'App.Http.Data.ApiResponseData', 'file' => '/app/types/generated.ts', 'ambient' => true],
+            ),
+        ]);
+        $output = $this->compiler->compile($file);
+
+        self::assertStringContainsString("'users.store': App.Http.Data.ApiResponseData", $output);
+    }
+
+    public function test_ambient_data_response_type_does_not_generate_import(): void
+    {
+        $file = self::makeFile('api', [
+            self::makeRoute(
+                'users.store',
+                'api/users',
+                methods: ['POST'],
+                dataResponseType: ['type' => 'App.Http.Data.ApiResponseData', 'file' => '/app/types/generated.ts', 'ambient' => true],
+            ),
+        ]);
+        $output = $this->compiler->compile($file);
+
+        self::assertStringNotContainsString('import type', $output);
     }
 
     // -------------------------------------------------------------------------
@@ -206,55 +356,6 @@ final class TypeScriptFileCompilerTest extends TestCase
 
         self::assertStringContainsString("'products.list'", $output);
         self::assertStringNotContainsString("'store.products.list'", $output);
-    }
-
-    // -------------------------------------------------------------------------
-    // Response interface
-    // -------------------------------------------------------------------------
-
-    public function test_response_interface_is_emitted_when_routes_have_response(): void
-    {
-        $file = self::makeFile('api', [
-            self::makeRoute('users.show', 'api/users/{id}', response: [
-                'wrap'       => null,
-                'collection' => false,
-                'shape'      => ['id' => 'number', 'name' => 'string'],
-            ]),
-        ]);
-        $output = $this->compiler->compile($file);
-
-        self::assertStringContainsString('export interface ApiRouteResponse', $output);
-        self::assertStringContainsString("'users.show':", $output);
-        self::assertStringContainsString('id: number', $output);
-        self::assertStringContainsString('name: string', $output);
-    }
-
-    public function test_collection_response_adds_array_suffix(): void
-    {
-        $file = self::makeFile('api', [
-            self::makeRoute('users.list', 'api/users', response: [
-                'wrap'       => null,
-                'collection' => true,
-                'shape'      => ['id' => 'number', 'name' => 'string'],
-            ]),
-        ]);
-        $output = $this->compiler->compile($file);
-
-        self::assertStringContainsString('[]', $output);
-    }
-
-    public function test_wrapped_response_includes_wrap_key(): void
-    {
-        $file = self::makeFile('api', [
-            self::makeRoute('users.list', 'api/users', response: [
-                'wrap'       => 'data',
-                'collection' => true,
-                'shape'      => ['id' => 'number'],
-            ]),
-        ]);
-        $output = $this->compiler->compile($file);
-
-        self::assertStringContainsString('{ data:', $output);
     }
 
     // -------------------------------------------------------------------------

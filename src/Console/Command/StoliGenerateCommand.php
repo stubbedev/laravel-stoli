@@ -12,7 +12,6 @@ class StoliGenerateCommand extends Command
 {
     protected $signature = 'stoli:generate
         {--F|force    : Force re-publish the runtime library files}
-        {--safe       : Skip Layer-0 actual controller execution (safer for environments with side effects)}
         {--type-check : Run tsc --noEmit after generation to validate the generated TypeScript}';
 
     protected $description = 'Publish the route files for the Laravel Stoli library';
@@ -22,7 +21,6 @@ class StoliGenerateCommand extends Command
         try {
             $publisher->publish(
                 overrideLibrary: (bool) $this->option('force'),
-                safe:            (bool) $this->option('safe'),
             );
             $this->info('Routes published');
         } catch (StoliException $exception) {

@@ -17,11 +17,13 @@ readonly class Route
         private ?string $prefix,
         private bool    $absolute,
         private ?string $host,
-        private ?array  $params = null,
-        private ?array  $response = null,
         private array   $wheres = [],
         private array   $methods = [],
         private ?string $stripPrefix = null,
+        /** @var array{type: string, file: string}|null */
+        private ?array  $dataRequestType = null,
+        /** @var array{type: string, file: string}|null */
+        private ?array  $dataResponseType = null,
     )
     {
     }
@@ -55,16 +57,6 @@ readonly class Route
         return implode('/', $segments);
     }
 
-    public function params(): ?array
-    {
-        return $this->params;
-    }
-
-    public function response(): ?array
-    {
-        return $this->response;
-    }
-
     public function wheres(): array
     {
         return $this->wheres;
@@ -73,6 +65,22 @@ readonly class Route
     public function methods(): array
     {
         return $this->methods;
+    }
+
+    /**
+     * @return array{type: string, file: string}|null
+     */
+    public function dataRequestType(): ?array
+    {
+        return $this->dataRequestType;
+    }
+
+    /**
+     * @return array{type: string, file: string}|null
+     */
+    public function dataResponseType(): ?array
+    {
+        return $this->dataResponseType;
     }
 
     public function primitives(): array

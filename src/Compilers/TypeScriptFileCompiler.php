@@ -65,12 +65,7 @@ final readonly class TypeScriptFileCompiler implements Compiler
     private function generateParamsInterface(string $module, File $file): string
     {
         $entries = $file->routes()->reduce(function (array $acc, Route $route): array {
-            $uriParams  = $this->extractUriParams($route->uri(), $route->wheres());
-            $formParams = $route->params() ?? [];
-            // FormRequest params take precedence over URI params with the same name
-            $merged = array_merge($uriParams, $formParams);
-
-            $acc[$route->name()] = "\t'{$route->name()}': " . self::buildParamType($merged) . ';';
+            $acc[$route->name()] = "\t'{$route->name()}': " . $this->buildParamTypeForRoute($route) . ';';
             return $acc;
         }, []);
 
@@ -79,13 +74,35 @@ final readonly class TypeScriptFileCompiler implements Compiler
         return "export interface {$module}RouteParams {\n$body\n}";
     }
 
+    private function buildParamTypeForRoute(Route $route): string
+    {
+        $uriParams      = $this->extractUriParams($route->uri(), $route->wheres());
+        $dataRequest    = $route->dataRequestType();
+
+        // When there is a Data request type, URI params that match a field in the
+        // Data class are dropped — the Data type takes precedence.  Remaining URI
+        // params (e.g. path-only identifiers not present in the body) are expressed
+        // as an inline object intersected with the Data type.
+        if ($dataRequest !== null) {
+            if (empty($uriParams)) {
+                return $dataRequest['type'];
+            }
+
+            $uriBlock = self::buildUriParamType($uriParams);
+            return "{$uriBlock} & {$dataRequest['type']}";
+        }
+
+        // No Data type — fall back to URI params only.
+        return self::buildUriParamType($uriParams);
+    }
+
     private function extractUriParams(string $uri, array $wheres = []): array
     {
         preg_match_all('/\{(\w+)(\?)?\}/', $uri, $matches, PREG_SET_ORDER);
 
         $params = [];
         foreach ($matches as $match) {
-            $name       = $match[1];
+            $name     = $match[1];
             $constraint = $wheres[$name] ?? null;
             $params[$name] = [
                 'type'     => $constraint !== null
@@ -98,32 +115,41 @@ final readonly class TypeScriptFileCompiler implements Compiler
         return $params;
     }
 
+    private static function buildUriParamType(array $params): string
+    {
+        if (empty($params)) {
+            return 'Record<string, unknown>';
+        }
+
+        $properties = [];
+
+        foreach ($params as $name => $info) {
+            $optional      = $info['required'] ? '' : '?';
+            $properties[]  = "$name$optional: {$info['type']}";
+        }
+
+        $properties[] = '[key: string]: unknown';
+
+        return '{ ' . implode('; ', $properties) . ' }';
+    }
+
     private static function generateResponseInterface(string $module, File $file): string
     {
         $entries = $file->routes()->reduce(function (array $acc, Route $route): array {
-            $response = $route->response();
+            $dataResponse = $route->dataResponseType();
 
-            if ($response === null) {
+            if ($dataResponse === null) {
                 return $acc;
             }
 
-            if (isset($response['typescript_type'])) {
-                $inner = $response['collection']
-                    ? $response['typescript_type'] . '[]'
-                    : $response['typescript_type'];
-
-                if ($response['wrap'] !== null) {
-                    $inner = "{ {$response['wrap']}: $inner }";
-                }
-            } else {
-                $shape = self::buildShapeType($response['shape']);
-                $inner = self::wrapShape($shape, $response['collection'], $response['wrap']);
-            }
-
-            $acc[] = "\t'{$route->name()}': $inner;";
+            $acc[] = "\t'{$route->name()}': {$dataResponse['type']};";
 
             return $acc;
         }, []);
+
+        if (empty($entries)) {
+            return '';
+        }
 
         $body = implode("\n", $entries);
 
@@ -170,62 +196,26 @@ final readonly class TypeScriptFileCompiler implements Compiler
         return implode("\n", $lines) . "\n";
     }
 
-    private static function buildShapeType(array $shape): string
-    {
-        if (empty($shape)) {
-            return 'Record<string, unknown>';
-        }
-
-        $parts = [];
-
-        foreach ($shape as $key => $type) {
-            $parts[] = "$key: $type";
-        }
-
-        return '{ ' . implode('; ', $parts) . ' }';
-    }
-
-    private static function wrapShape(string $shape, bool $collection, ?string $wrap): string
-    {
-        $inner = $collection ? $shape . '[]' : $shape;
-
-        return $wrap !== null ? "{ $wrap: $inner }" : $inner;
-    }
-
-    private static function buildParamType(array $params): string
-    {
-        if (empty($params)) {
-            return 'Record<string, unknown>';
-        }
-
-        $properties = [];
-
-        foreach ($params as $name => $info) {
-            if ($name === '*') {
-                continue; // top-level wildcard is covered by the index signature below
-            }
-            $optional = $info['required'] ? '' : '?';
-            $properties[] = "$name$optional: {$info['type']}";
-        }
-
-        $properties[] = '[key: string]: unknown';
-
-        return '{ ' . implode('; ', $properties) . ' }';
-    }
-
     /**
      * Build an import block for any TypeScript type references collected from routes.
-     * Groups types by their source file and emits one `import type` statement per file.
+     *
+     * Only emits `import type` statements for non-ambient types (i.e. types that live
+     * in regular ES module files with top-level `export type` declarations).
+     *
+     * Types that come from `declare namespace` output files are ambient globals and
+     * must not be imported — they are referenced directly by their dotted namespace
+     * path (e.g. `App.Http.Data.StoreUserRequestData`).
      */
     private static function collectTypeScriptImports(File $file): string
     {
         $byFile = $file->routes()->reduce(function (array $acc, Route $route): array {
-            $response = $route->response();
-
-            if (isset($response['typescript_type'], $response['typescript_file'])) {
-                $acc[$response['typescript_file']][] = $response['typescript_type'];
+            foreach (['dataRequestType', 'dataResponseType'] as $getter) {
+                $typeInfo = $route->$getter();
+                // Skip ambient types — they are declare namespace globals, no import needed.
+                if ($typeInfo !== null && !$typeInfo['ambient']) {
+                    $acc[$typeInfo['file']][] = $typeInfo['type'];
+                }
             }
-
             return $acc;
         }, []);
 

@@ -284,14 +284,14 @@ final class TypeScriptFileCompilerTest extends TestCase
         self::assertStringContainsString("'users.store': ApiResponseData", $output);
     }
 
-    public function test_response_interface_is_omitted_when_no_data_response_types(): void
+    public function test_response_interface_is_included_when_no_data_response_types(): void
     {
         $file = self::makeFile('api', [
             self::makeRoute('users.list', 'api/users'),
         ]);
         $output = $this->compiler->compile($file);
 
-        self::assertStringNotContainsString('export interface ApiRouteResponse', $output);
+        self::assertStringContainsString('export interface ApiRouteResponse', $output);
     }
 
     public function test_non_ambient_data_response_type_generates_import(): void

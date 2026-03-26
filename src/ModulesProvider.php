@@ -36,7 +36,7 @@ final readonly class ModulesProvider
             $config['rootUrl'] ?? config('app.url'),
             $config['name'],
             $config['prefix'] ?? '',
-            $config['path'] ?? $this->config->libraryPath(),
+            $config['path'] ?? $this->config->defaultOutputPath(),
             $config['absolute'] ?? true,
             $config['stripPrefix'] ?? null,
         );

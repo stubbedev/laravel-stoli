@@ -3,20 +3,6 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | Library Path
-    |--------------------------------------------------------------------------
-    |
-    | Specifies the directory where the main JavaScript library will be
-    | published. This is the location where the library or service that will
-    | use the exported routes will be saved. The generated files containing
-    | the routes will be used by this library, typically within your application's
-    | resources directory.
-    |
-    */
-    'library' => 'resources/routes',
-
-    /*
-    |--------------------------------------------------------------------------
     | Split Routes into Multiple Files
     |--------------------------------------------------------------------------
     |
@@ -58,13 +44,10 @@ return [
     |
     | name - The name of the generated file (without extension). Defaults
     |        to 'api' if not specified.
-    | path - The destination directory for this specific file. If omitted,
-    |        it falls back to the global 'library' path defined above.
     |
     */
     'single' => [
         'name' => 'api',
-        'path' => 'resources/routes',
     ],
 
     /*
@@ -142,10 +125,11 @@ return [
             |--------------------------------------------------------------------------
             |
             | This value determines the path where the generated TypeScript routes file
-            | will be stored. If omitted, it falls back to the global 'library' path.
+            | will be stored. If omitted, it falls back to the typescript-transformer
+            | output directory.
             |
             */
-            'path' => 'resources/routes',
+            'path' => null,
 
             /*
             |--------------------------------------------------------------------------

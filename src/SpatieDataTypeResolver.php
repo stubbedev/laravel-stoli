@@ -259,7 +259,7 @@ final readonly class SpatieDataTypeResolver
         }
 
         foreach (['Spatie\\LaravelData\\Data', 'Spatie\\LaravelData\\Resource'] as $base) {
-            if (class_exists($base) && (is_a($className, $base, true))) {
+            if (is_a($className, $base, true)) {
                 return true;
             }
         }
@@ -345,10 +345,6 @@ final readonly class SpatieDataTypeResolver
      */
     private function resolveOutputFileFromContainer(): ?string
     {
-        if (!class_exists('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig')) {
-            return null;
-        }
-
         try {
             $config = app('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig');
         } catch (Throwable) {

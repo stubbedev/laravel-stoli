@@ -40,6 +40,10 @@ final readonly class RoutesFileExporter
 
     private function export(File $file): void
     {
+        if ($file->path() === null) {
+            return;
+        }
+
         try {
             $content = $this->compiler->compile($file);
 

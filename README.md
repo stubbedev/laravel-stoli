@@ -2,29 +2,45 @@
 
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](license)
 
-`stubbedev/laravel-stoli` is a Laravel package that exports your application's named routes to TypeScript, enabling you to use route names instead of hardcoded URLs in your frontend code. It generates fully typed TypeScript definitions — including parameter types inferred from FormRequest validation rules, URI constraint types, and response types inferred from JsonResource classes.
+`stubbedev/laravel-stoli` is a Laravel package that exports your application's named routes to TypeScript, enabling you to use route names instead of hardcoded URLs in your frontend code. It builds on top of [`spatie/laravel-data`](https://github.com/spatie/laravel-data) and [`spatie/laravel-typescript-transformer`](https://github.com/spatie/laravel-typescript-transformer) — both are required dependencies — and generates fully typed TypeScript definitions including parameter types inferred from FormRequest validation rules, URI constraint types, and response types derived from Data classes and the transformer's generated output.
+
+## Requirements
+
+- PHP 8.4+
+- Laravel 11.15+
+- `spatie/laravel-data` ^3|^4
+- `spatie/laravel-typescript-transformer` ^3
 
 ## Installation
-
-Requires PHP 8.4 and Laravel 11.15+.
 
 ```bash
 composer require stubbedev/laravel-stoli
 ```
 
-Publish the configuration and JS library files:
+Publish and configure `spatie/laravel-typescript-transformer` first — Stoli uses its output directory as the destination for all generated files:
+
+```bash
+php artisan vendor:publish --provider="Spatie\LaravelTypeScriptTransformer\TypeScriptTransformerServiceProvider"
+```
+
+Then publish the Stoli configuration:
 
 ```bash
 php artisan vendor:publish --tag='stoli'
-php artisan stoli:generate
 ```
 
-This produces two files in your configured `library` path:
+Generate routes and types:
+
+```bash
+php artisan typescript:transform   # generates types from Data classes
+php artisan stoli:generate         # generates route files referencing those types
+```
+
+`stoli:generate` writes the following into the typescript-transformer output directory:
 
 - `stoli.js` — the `RouteService` runtime
 - `stoli.d.ts` — TypeScript declarations
-
-It also generates a `.ts` route file per module (e.g. `api.ts`).
+- `api.ts` (or one file per module) — typed route definitions
 
 ## Usage
 
@@ -61,8 +77,8 @@ api.generateFullURL("admin.products.update", { id: 42, name: "Notebook" });
 When routes declare `->where()` constraints, the parameter type is narrowed accordingly:
 
 ```php
-Route::get('/users/{id}', ...)->whereNumber('id');          // id: number
-Route::get('/posts/{slug}', ...)->whereAlpha('slug');        // slug: string
+Route::get('/users/{id}', ...)->whereNumber('id');           // id: number
+Route::get('/posts/{slug}', ...)->whereAlpha('slug');         // slug: string
 Route::get('/items/{type}', ...)->whereIn('type', ['a','b']); // type: 'a' | 'b'
 ```
 
@@ -87,52 +103,24 @@ Validation rules are reflected directly into TypeScript:
 
 ### Typed responses
 
-Each generated module also exports `ApiRouteResponse`, a per-route map of response shapes. Response types are inferred automatically — no annotations needed.
-
-**Resolution order (first match wins):**
-
-1. **Actual execution** — for GET routes, the controller is called via the container with seeded model instances and a test user. The real JSON response is used to infer types exactly. Run with `--env=testing` to use your test database.
-2. **Return type annotation** — if the controller method is annotated with a `JsonResource` or `Spatie\LaravelData\Data` subclass as its return type, the response shape is extracted statically.
-3. **Method body analysis** — the controller body is tokenised to find the array passed to response methods. Resource calls (`::make()`, `::collection()`, `new Resource()`) and Data calls (`::from()`, `::collect()`, `new DataClass()`) within array values are resolved to their shapes. The wrapping key (e.g. `data`) is detected by calling the response wrapper method with an empty payload.
+Each generated module also exports `ApiRouteResponse`, a per-route map of response shapes. A route is included in the interface when its controller method has a return type annotation that is a `Spatie\LaravelData\Data` subclass and that class has been transformed by `php artisan typescript:transform`.
 
 The generated interface looks like:
 
 ```typescript
+import type { UserData, UserResource } from '../types/generated';
+
 export interface ApiRouteResponse {
-    'api.users.show': { data: { id: number; name: string; email: string } };
-    'api.users.index': { data: { id: number; name: string; email: string }[] };
-    'api.downloadtemplates.index': { data: { templates: { id: number; name: string; ... }[]; sections: unknown }; message: string; status: number };
+    'api.users.show': UserData;
+    'api.users.index': UserResource;
 }
 ```
 
-Routes where no response can be detected are absent from the interface. The axios router (see below) falls back to `Record<string, unknown>` for those routes.
-
-#### Spatie Laravel TypeScript Transformer
-
-If [`spatie/laravel-typescript-transformer`](https://github.com/spatie/laravel-typescript-transformer) is installed and has already generated its output file (via `php artisan typescript:transform`), Stoli uses the generated type names directly instead of re-deriving them:
-
-```typescript
-// Without laravel-typescript-transformer (inline shape):
-'api.users.show': { id: number; name: string; email: string | null };
-
-// With laravel-typescript-transformer (type reference + import):
-import type { UserData } from '../types/generated';
-// ...
-'api.users.show': UserData;
-```
-
-The import path is computed relative to the module's output directory. The `output_file` in `config/typescript-transformer.php` is used to locate the generated definitions file.
-
-Run in the right order:
-
-```bash
-php artisan typescript:transform   # generate TypeScript types
-php artisan stoli:generate         # reference them in route types
-```
+Routes without a resolvable Data return type are absent from the interface. The axios router (see below) falls back to `Record<string, unknown>` for those routes.
 
 #### Spatie Laravel Data
 
-Controllers returning [`spatie/laravel-data`](https://spatie.be/docs/laravel-data) Data objects are detected automatically. The TypeScript shape is derived from the class's public typed properties:
+Controllers returning `Spatie\LaravelData\Data` objects are detected automatically. The TypeScript shape is derived from the class's public typed properties:
 
 ```php
 class UserData extends Data
@@ -169,25 +157,33 @@ Supported property types:
 | `DateTimeInterface` | `string` |
 | `Collection` | `unknown[]` |
 
-#### Actual execution with a test database
+#### Spatie Laravel TypeScript Transformer
 
-For the most accurate types, run generation against your test environment:
+When `php artisan typescript:transform` has already been run, Stoli uses the generated type names directly instead of re-deriving inline shapes:
 
-```bash
-php artisan stoli:generate --env=testing --force
+```typescript
+// Without typescript:transform (inline shape):
+'api.users.show': { id: number; name: string; email: string | null };
+
+// With typescript:transform (type reference + import):
+import type { UserData } from '../types/generated';
+// ...
+'api.users.show': UserData;
 ```
 
-Stoli will:
-- Wrap each route execution in a `DB::beginTransaction()` / `DB::rollBack()` so nothing is persisted
-- Create model instances for URI route parameters using their factory (`Model::factory()->create()`), falling back to schema-derived dummy values when no factory exists
-- Authenticate as a factory-created user from the configured auth model
+The import path is computed relative to the module's output directory. Always run `typescript:transform` before `stoli:generate`:
+
+```bash
+php artisan typescript:transform
+php artisan stoli:generate
+```
 
 ### Axios router (optional)
 
-Publish the axios router stub:
+Enable in `config/stoli.php`:
 
-```bash
-php artisan vendor:publish --tag='stoli'
+```php
+'axios' => true,
 ```
 
 The generated router (`api.router.ts`) wraps axios with full type inference for both params and responses:
@@ -203,6 +199,8 @@ response.data; // typed as { data: { id: number; name: string; email: string } }
 const list = await Stoli.get("api.products.index");
 list.data; // typed as Record<string, unknown>
 ```
+
+Requires axios: `npm install axios`
 
 ### Route service methods
 
@@ -226,24 +224,26 @@ Publish and edit `config/stoli.php` to customise.
 
 ```php
 return [
-    'library' => 'resources/routes',   // where stoli.js / stoli.d.ts are published
-    'split'   => true,                  // true = one file per module, false = single file
-    'single'  => [                      // used when split = false
-        'name' => 'api',
-        'path' => 'resources/routes',
+    'split'  => true,        // true = one file per module, false = single file
+    'axios'  => false,       // generate axios router wrapper
+    'single' => [            // used when split = false
+        'name' => 'api',     // output filename (without extension)
     ],
     'modules' => [
         [
-            'match'    => '*',                        // route prefix filter (* = all)
-            'name'     => 'api',                      // output file name (api.ts)
-            'rootUrl'  => env('APP_URL', 'http://localhost'),
-            'absolute' => true,
-            'prefix'   => null,
-            'path'     => 'resources/routes',
+            'match'       => '*',                         // route prefix filter (* = all)
+            'name'        => 'api',                       // output file name (api.ts)
+            'rootUrl'     => env('APP_URL', 'http://localhost'),
+            'absolute'    => true,
+            'prefix'      => null,
+            'path'        => null,                        // defaults to typescript-transformer output dir
+            'stripPrefix' => null,
         ],
     ],
 ];
 ```
+
+All generated files are written to the `output_path` configured in `config/typescript-transformer.php`. Per-module `path` can override this for individual modules.
 
 ### Module options
 
@@ -254,7 +254,8 @@ return [
 | `rootUrl` | `APP_URL` | Base URL for absolute URLs |
 | `absolute` | `true` | Generate absolute (`https://…`) or relative (`/…`) URLs |
 | `prefix` | `null` | Prefix prepended to every generated URL |
-| `path` | `library` value | Output directory for this module's `.ts` file |
+| `path` | transformer output dir | Output directory for this module's `.ts` file |
+| `stripPrefix` | `null` | Route name prefix to strip (e.g. `store.` turns `store.products.list` into `products.list`) |
 
 ### Multiple modules
 

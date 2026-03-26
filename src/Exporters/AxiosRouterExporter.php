@@ -28,7 +28,7 @@ final readonly class AxiosRouterExporter
         if (! $this->config->splitModulesInFiles()) {
             $this->generate(
                 $this->config->defaultSingleFileModuleName(),
-                $this->config->defaultSingleFileOutputPath(),
+                $this->config->defaultOutputPath(),
                 'router.ts',
             );
 
@@ -40,14 +40,18 @@ final readonly class AxiosRouterExporter
 
         foreach ($modules as $module) {
             $name = $module['name'];
-            $path = $module['path'] ?? $this->config->libraryPath();
+            $path = $module['path'] ?? $this->config->defaultOutputPath();
             $filename = $multiple ? "{$name}.router.ts" : 'router.ts';
             $this->generate($name, $path, $filename);
         }
     }
 
-    private function generate(string $name, string $path, string $filename): void
+    private function generate(string $name, ?string $path, string $filename): void
     {
+        if ($path === null) {
+            return;
+        }
+
         $stub = $this->filesystem->get(
             join_paths($this->config->resourcesPath(), 'stoli.router.stub')
         );

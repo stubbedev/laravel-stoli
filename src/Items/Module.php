@@ -15,7 +15,7 @@ final readonly class Module
         private string $rootUrl,
         private string $name,
         private string $prefix,
-        private string $path,
+        private ?string $path,
         private bool $absolute,
         private ?string $stripPrefix = null,
     ) {
@@ -42,7 +42,7 @@ final readonly class Module
         return $this->prefix;
     }
 
-    public function path(): string
+    public function path(): ?string
     {
         return $this->path;
     }

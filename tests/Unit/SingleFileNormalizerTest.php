@@ -38,9 +38,8 @@ final class SingleFileNormalizerTest extends TestCase
     private static function makeStoliConfig(array $overrides = []): StoliConfig
     {
         return new StoliConfig(array_merge([
-            'library' => 'resources/routes',
             'split' => false,
-            'single' => ['name' => 'api', 'path' => 'resources/routes'],
+            'single' => ['name' => 'api'],
             'modules' => [],
             'axios' => false,
             'resources' => __DIR__.'/../../resources',
@@ -77,10 +76,10 @@ final class SingleFileNormalizerTest extends TestCase
         self::assertSame(3, $merged->routes()->count());
     }
 
-    public function test_single_normalizer_uses_config_name_and_path(): void
+    public function test_single_normalizer_uses_config_name(): void
     {
         $config = self::makeStoliConfig([
-            'single' => ['name' => 'routes', 'path' => 'resources/js'],
+            'single' => ['name' => 'routes'],
         ]);
         $normalizer = new SingleFileNormalizer($config);
 
@@ -91,7 +90,9 @@ final class SingleFileNormalizerTest extends TestCase
         $merged = $result->values()[0];
 
         self::assertSame('routes', $merged->name());
-        self::assertSame('resources/js', $merged->path());
+        // Path is derived from the typescript-transformer output directory;
+        // without a container in unit tests it resolves to null.
+        self::assertNull($merged->path());
     }
 
     // -------------------------------------------------------------------------

@@ -20,7 +20,7 @@ final readonly class SingleFileNormalizer implements Normalizer
         return new ArrayList([
             new File(
                 $this->config->defaultSingleFileModuleName(),
-                $this->config->defaultSingleFileOutputPath(),
+                $this->config->defaultOutputPath(),
                 $files->flatMap(static fn (File $file) => $file->routes())
                     ->unique(static fn (Route $route) => $route->name())
             ),

@@ -20,15 +20,21 @@ final readonly class RouteServiceExporter
 
     public function publish(): void
     {
+        $outputPath = $this->config->defaultOutputPath();
+
+        if ($outputPath === null) {
+            return;
+        }
+
         try {
-            $this->filesystem->makeDirectory($this->config->libraryPath(), 0755, true, true);
+            $this->filesystem->makeDirectory($outputPath, 0755, true, true);
 
             $this->filesystem->put(
-                join_paths($this->config->libraryPath(), 'stoli.js'),
+                join_paths($outputPath, 'stoli.js'),
                 $this->filesystem->get(join_paths($this->config->resourcesPath(), 'stoli.stub'))
             );
             $this->filesystem->put(
-                join_paths($this->config->libraryPath(), 'stoli.d.ts'),
+                join_paths($outputPath, 'stoli.d.ts'),
                 $this->filesystem->get(join_paths($this->config->resourcesPath(), 'stoli.d.stub'))
             );
         } catch (Throwable $error) {

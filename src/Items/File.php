@@ -10,7 +10,7 @@ final readonly class File
 {
     public function __construct(
         private string $name,
-        private string $path,
+        private ?string $path,
         private ArrayList $routes
     ) {}
 
@@ -24,7 +24,7 @@ final readonly class File
         return $this->name;
     }
 
-    public function path(): string
+    public function path(): ?string
     {
         return $this->path;
     }

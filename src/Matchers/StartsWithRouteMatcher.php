@@ -9,7 +9,7 @@ use StubbeDev\LaravelStoli\RouteMatcher;
 
 final readonly class StartsWithRouteMatcher implements RouteMatcher
 {
-    private const string ANY = '*';
+    private const ANY = '*';
 
     public function matches(string $fullUri, string $pattern): bool
     {

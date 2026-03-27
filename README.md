@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- PHP 8.4+
+- PHP 8.2+
 - Laravel 11.15+
 - `spatie/laravel-data` ^3|^4
 - `spatie/laravel-typescript-transformer` ^3

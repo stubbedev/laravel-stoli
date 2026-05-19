@@ -26,7 +26,7 @@
   ],
   "require": {
     "php": "^8.2",
-    "laravel/framework": "^v11.15|^12.0",
+    "laravel/framework": "^v11.15|^12.0|^13.0",
     "spatie/laravel-data": "^3|^4",
     "spatie/laravel-typescript-transformer": "^3"
   },

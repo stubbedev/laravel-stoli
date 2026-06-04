@@ -1,0 +1,49 @@
+name: Composer Auto Update
+
+on:
+  schedule:
+    # Weekly, Monday 04:00 UTC
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    name: Update composer dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+
+      # Updates within the version constraints in composer.json only.
+      # Major bumps require a constraint change, so this never pulls breaking changes.
+      - name: Update dependencies
+        run: composer update --no-interaction --no-progress --with-all-dependencies
+
+      - name: Security audit
+        run: composer audit --no-interaction
+
+      - name: Run tests
+        run: vendor/bin/phpunit
+
+      - name: Commit updated lock file
+        run: |
+          if git diff --quiet -- composer.lock; then
+            echo "composer.lock unchanged, nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add composer.lock
+          git commit -m "chore: auto-update composer dependencies"
+          git push

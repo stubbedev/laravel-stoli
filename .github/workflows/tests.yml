@@ -39,7 +39,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -69,7 +69,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.resolve.outputs.ok == 'true'
-        uses: nick-invision/retry@v2
+        uses: nick-invision/retry@v4
         with:
           timeout_minutes: 5
           max_attempts: 5

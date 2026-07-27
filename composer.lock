@@ -690,16 +690,16 @@
         },
         {
             "name": "guzzlehttp/guzzle",
-            "version": "7.15.1",
+            "version": "7.15.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/guzzle.git",
-                "reference": "61443dfb33c62f308ee8add20f45b4d6e4bf8d2f"
+                "reference": "744101956d78b7c1384d0cbf379db13e859167bf"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/61443dfb33c62f308ee8add20f45b4d6e4bf8d2f",
-                "reference": "61443dfb33c62f308ee8add20f45b4d6e4bf8d2f",
+                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/744101956d78b7c1384d0cbf379db13e859167bf",
+                "reference": "744101956d78b7c1384d0cbf379db13e859167bf",
                 "shasum": ""
             },
             "require": {
@@ -798,7 +798,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/guzzle/issues",
-                "source": "https://github.com/guzzle/guzzle/tree/7.15.1"
+                "source": "https://github.com/guzzle/guzzle/tree/7.15.2"
             },
             "funding": [
                 {
@@ -814,7 +814,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-07-18T11:23:11+00:00"
+            "time": "2026-07-26T23:23:20+00:00"
         },
         {
             "name": "guzzlehttp/promises",
@@ -1107,16 +1107,16 @@
         },
         {
             "name": "jetbrains/phpstorm-stubs",
-            "version": "v2026.1",
+            "version": "v2026.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/JetBrains/phpstorm-stubs",
-                "reference": "2cdd054c4109dfb76667c9198bf9427606354243"
+                "reference": "709e512210784a7c0a677b3a89d35def844a59b9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/JetBrains/phpstorm-stubs/zipball/2cdd054c4109dfb76667c9198bf9427606354243",
-                "reference": "2cdd054c4109dfb76667c9198bf9427606354243",
+                "url": "https://api.github.com/repos/JetBrains/phpstorm-stubs/zipball/709e512210784a7c0a677b3a89d35def844a59b9",
+                "reference": "709e512210784a7c0a677b3a89d35def844a59b9",
                 "shasum": ""
             },
             "require-dev": {
@@ -1147,20 +1147,20 @@
                 "stubs",
                 "type"
             ],
-            "time": "2026-02-19T20:12:01+00:00"
+            "time": "2026-06-12T13:19:10+00:00"
         },
         {
             "name": "laravel/framework",
-            "version": "v13.20.0",
+            "version": "v13.22.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/framework.git",
-                "reference": "b9d1bccad5fbc32578dca22566bb11e7c0e545d7"
+                "reference": "d354afa45334cdac523fbc015f203a78d7e2f5c6"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/framework/zipball/b9d1bccad5fbc32578dca22566bb11e7c0e545d7",
-                "reference": "b9d1bccad5fbc32578dca22566bb11e7c0e545d7",
+                "url": "https://api.github.com/repos/laravel/framework/zipball/d354afa45334cdac523fbc015f203a78d7e2f5c6",
+                "reference": "d354afa45334cdac523fbc015f203a78d7e2f5c6",
                 "shasum": ""
             },
             "require": {
@@ -1374,7 +1374,7 @@
                 "issues": "https://github.com/laravel/framework/issues",
                 "source": "https://github.com/laravel/framework"
             },
-            "time": "2026-07-14T14:22:22+00:00"
+            "time": "2026-07-24T20:38:48+00:00"
         },
         {
             "name": "laravel/prompts",
@@ -1437,16 +1437,16 @@
         },
         {
             "name": "laravel/serializable-closure",
-            "version": "v2.0.13",
+            "version": "v2.0.15",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/serializable-closure.git",
-                "reference": "b566ee0dd251f3c4078bed003a7ce015f5ea6dce"
+                "reference": "dccd8bcb851bb03fcc005df650b708b57cc52661"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/serializable-closure/zipball/b566ee0dd251f3c4078bed003a7ce015f5ea6dce",
-                "reference": "b566ee0dd251f3c4078bed003a7ce015f5ea6dce",
+                "url": "https://api.github.com/repos/laravel/serializable-closure/zipball/dccd8bcb851bb03fcc005df650b708b57cc52661",
+                "reference": "dccd8bcb851bb03fcc005df650b708b57cc52661",
                 "shasum": ""
             },
             "require": {
@@ -1494,7 +1494,7 @@
                 "issues": "https://github.com/laravel/serializable-closure/issues",
                 "source": "https://github.com/laravel/serializable-closure"
             },
-            "time": "2026-04-16T14:03:50+00:00"
+            "time": "2026-07-21T16:49:22+00:00"
         },
         {
             "name": "league/commonmark",
@@ -3475,30 +3475,30 @@
         },
         {
             "name": "roave/better-reflection",
-            "version": "6.71.0",
+            "version": "6.72.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/Roave/BetterReflection.git",
-                "reference": "3ec176d4a161b4e8764edc625d69ff624ca390b1"
+                "reference": "b34deeed26ec22233b1a776591ef45abc154a17d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Roave/BetterReflection/zipball/3ec176d4a161b4e8764edc625d69ff624ca390b1",
-                "reference": "3ec176d4a161b4e8764edc625d69ff624ca390b1",
+                "url": "https://api.github.com/repos/Roave/BetterReflection/zipball/b34deeed26ec22233b1a776591ef45abc154a17d",
+                "reference": "b34deeed26ec22233b1a776591ef45abc154a17d",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
-                "jetbrains/phpstorm-stubs": "2026.1",
-                "nikic/php-parser": "^5.7.0",
+                "jetbrains/phpstorm-stubs": "2026.2",
+                "nikic/php-parser": "^5.8.0",
                 "php": "~8.4.1 || ~8.5.0"
             },
             "conflict": {
                 "thecodingmachine/safe": "<1.1.3"
             },
             "require-dev": {
-                "phpbench/phpbench": "^1.6.1",
-                "phpunit/phpunit": "^13.1.8"
+                "phpbench/phpbench": "^1.7.0",
+                "phpunit/phpunit": "^13.2.4"
             },
             "suggest": {
                 "composer/composer": "Required to use the ComposerSourceLocator"
@@ -3538,9 +3538,9 @@
             "description": "Better Reflection - an improved code reflection API",
             "support": {
                 "issues": "https://github.com/Roave/BetterReflection/issues",
-                "source": "https://github.com/Roave/BetterReflection/tree/6.71.0"
+                "source": "https://github.com/Roave/BetterReflection/tree/6.72.0"
             },
-            "time": "2026-05-02T10:56:00+00:00"
+            "time": "2026-07-22T18:50:32+00:00"
         },
         {
             "name": "spatie/file-system-watcher",
@@ -7725,16 +7725,16 @@
         },
         {
             "name": "orchestra/workbench",
-            "version": "v11.1.0",
+            "version": "v11.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/orchestral/workbench.git",
-                "reference": "e750c7bcae4405e054ff286475502e23274de04b"
+                "reference": "78f27959b8e5caa72c996c6ccd0ddfeff462cb2b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/orchestral/workbench/zipball/e750c7bcae4405e054ff286475502e23274de04b",
-                "reference": "e750c7bcae4405e054ff286475502e23274de04b",
+                "url": "https://api.github.com/repos/orchestral/workbench/zipball/78f27959b8e5caa72c996c6ccd0ddfeff462cb2b",
+                "reference": "78f27959b8e5caa72c996c6ccd0ddfeff462cb2b",
                 "shasum": ""
             },
             "require": {
@@ -7786,9 +7786,9 @@
             ],
             "support": {
                 "issues": "https://github.com/orchestral/workbench/issues",
-                "source": "https://github.com/orchestral/workbench/tree/v11.1.0"
+                "source": "https://github.com/orchestral/workbench/tree/v11.2.0"
             },
-            "time": "2026-03-24T23:09:55+00:00"
+            "time": "2026-07-22T09:55:13+00:00"
         },
         {
             "name": "phar-io/manifest",
@@ -8255,16 +8255,16 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "12.5.31",
+            "version": "12.5.32",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "0608d157a284f15cc73b99a3327eff06b66a176d"
+                "reference": "c02591dd7840ed124a98d7770753329ad28e9f8f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/0608d157a284f15cc73b99a3327eff06b66a176d",
-                "reference": "0608d157a284f15cc73b99a3327eff06b66a176d",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/c02591dd7840ed124a98d7770753329ad28e9f8f",
+                "reference": "c02591dd7840ed124a98d7770753329ad28e9f8f",
                 "shasum": ""
             },
             "require": {
@@ -8333,7 +8333,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
                 "security": "https://github.com/sebastianbergmann/phpunit/security/policy",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/12.5.31"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/12.5.32"
             },
             "funding": [
                 {
@@ -8341,7 +8341,7 @@
                     "type": "other"
                 }
             ],
-            "time": "2026-07-06T14:54:16+00:00"
+            "time": "2026-07-25T06:54:13+00:00"
         },
         {
             "name": "psy/psysh",

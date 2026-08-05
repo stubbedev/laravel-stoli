@@ -43,6 +43,23 @@ use Throwable;
 final readonly class SpatieDataTypeResolver
 {
     /**
+     * Inner generic arguments that are not classes (e.g. ApiResponseData<null>)
+     * are rendered directly as TypeScript instead of being dropped.
+     */
+    private const TS_LITERAL_TYPES = [
+        'null' => 'null',
+        'bool' => 'boolean',
+        'boolean' => 'boolean',
+        'true' => 'true',
+        'false' => 'false',
+        'int' => 'number',
+        'integer' => 'number',
+        'float' => 'number',
+        'string' => 'string',
+        'mixed' => 'unknown',
+    ];
+
+    /**
      * @return array{
      *     request: array{type: string, file: string, ambient: bool}|null,
      *     response: array{type: string, file: string, ambient: bool}|null,
@@ -139,20 +156,22 @@ final readonly class SpatieDataTypeResolver
         }
 
         // Attempt to resolve a generic type argument from the PHPDoc @return tag.
-        $innerClass = $this->resolvePhpDocReturnGeneric($method, $className);
+        $inner = $this->resolvePhpDocReturnGeneric($method, $className);
 
-        if ($innerClass === null) {
+        if ($inner === null) {
             return $resolved;
         }
 
-        $innerResolved = $this->lookupTransformerType($innerClass);
+        $innerType = self::TS_LITERAL_TYPES[strtolower($inner)]
+            ?? $this->lookupTransformerType($inner)['type']
+            ?? null;
 
-        if ($innerResolved === null) {
+        if ($innerType === null) {
             return $resolved;
         }
 
         return [
-            'type' => "{$resolved['type']}<{$innerResolved['type']}>",
+            'type' => "{$resolved['type']}<{$innerType}>",
             'file' => $resolved['file'],
             'ambient' => $resolved['ambient'],
         ];
@@ -165,6 +184,9 @@ final readonly class SpatieDataTypeResolver
      *
      * e.g. "@return ApiResponseData<StoreUserResponseData>" → resolves the
      * short name "StoreUserResponseData" to its FQN using the class's use statements.
+     *
+     * Non-class arguments listed in self::TS_LITERAL_TYPES (e.g. the "null" in
+     * "@return ApiResponseData<null>") are returned verbatim.
      */
     private function resolvePhpDocReturnGeneric(ReflectionMethod $method, string $outerClass): ?string
     {
@@ -199,6 +221,10 @@ final readonly class SpatieDataTypeResolver
 
                 if (!$innerTypeNode instanceof IdentifierTypeNode) {
                     continue;
+                }
+
+                if (isset(self::TS_LITERAL_TYPES[strtolower($innerTypeNode->name)])) {
+                    return $innerTypeNode->name;
                 }
 
                 return $this->resolveClassName($innerTypeNode->name, $method->getDeclaringClass());

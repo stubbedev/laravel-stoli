@@ -20,7 +20,7 @@ abstract class TestCase extends BaseTestCase
             ->set('stoli', [
                 'split' => false,
                 'modules' => static::modules(),
-                ...self::config(),
+                ...static::config(),
             ]);
     }
 

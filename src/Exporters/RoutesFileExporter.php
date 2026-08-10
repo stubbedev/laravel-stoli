@@ -46,15 +46,14 @@ final readonly class RoutesFileExporter
 
         try {
             $content = $this->compiler->compile($file);
+            $filePath = join_paths($file->path(), "{$file->name()}.{$this->compiler->extension()}");
 
             // Skip writing when the compiled content has not changed since the last run.
-            if ($this->hashCache->isUnchanged($file, $content)) {
+            if ($this->hashCache->isUnchanged($file, $content, $filePath)) {
                 return;
             }
 
             $this->filesystem->makeDirectory($file->path(), 0755, true, true);
-
-            $filePath = join_paths($file->path(), "{$file->name()}.{$this->compiler->extension()}");
 
             $this->filesystem->put($filePath, $content);
 

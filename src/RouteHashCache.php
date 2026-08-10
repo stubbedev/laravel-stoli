@@ -34,29 +34,26 @@ final readonly class RouteHashCache
 
     /**
      * Returns true if $content is identical to the last written content for
-     * this file AND the file still exists on disk.
+     * this file AND $writtenPath still exists on disk.
      */
-    public function isUnchanged(File $file, string $content): bool
+    public function isUnchanged(File $file, string $content, string $writtenPath): bool
     {
         $key = $this->key($file);
-        $hash = hash('sha256', $content);
-        $onDisk = join_paths($file->path(), $file->name().'.ts');
 
         return isset($this->stored[$key])
-            && $this->stored[$key] === $hash
-            && $this->filesystem->exists($onDisk);
+            && $this->stored[$key] === hash('sha256', $content)
+            && $this->filesystem->exists($writtenPath);
     }
 
     /**
      * Record the hash of content that was just written for $file.
+     *
+     * Merges into what is on disk rather than the snapshot taken in the constructor,
+     * so recording one file does not drop the hashes recorded for its siblings.
      */
     public function record(File $file, string $content): void
     {
-        $key = $this->key($file);
-        $hash = hash('sha256', $content);
-        $fresh = array_merge($this->stored, [$key => $hash]);
-
-        $this->persist($fresh);
+        $this->persist(array_merge($this->load(), [$this->key($file) => hash('sha256', $content)]));
     }
 
     private function key(File $file): string

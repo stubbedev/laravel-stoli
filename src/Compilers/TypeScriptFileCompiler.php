@@ -7,6 +7,7 @@ namespace StubbeDev\LaravelStoli\Compilers;
 use Illuminate\Support\Str;
 use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\Items\Route;
+use StubbeDev\LaravelStoli\Utils;
 
 final readonly class TypeScriptFileCompiler implements Compiler
 {
@@ -222,42 +223,11 @@ final readonly class TypeScriptFileCompiler implements Compiler
         $lines = [];
 
         foreach ($byFile as $absFile => $types) {
-            $rel = self::relativeImportPath($fromDir, $absFile);
+            $rel = Utils::relativeImportPath($fromDir, $absFile);
             $names = implode(', ', array_unique($types));
             $lines[] = "import type { $names } from '$rel';";
         }
 
         return implode("\n", $lines);
-    }
-
-    /**
-     * Compute the relative import path from a directory to an absolute file path,
-     * stripping .d.ts / .ts extensions (TypeScript resolves them automatically).
-     */
-    private static function relativeImportPath(string $fromDir, string $toFile): string
-    {
-        // Strip TS extensions — TypeScript resolves the file without them
-        $toFile = preg_replace('/\.d\.ts$|\.ts$/', '', $toFile);
-
-        $from = array_values(array_filter(explode('/', $fromDir), fn ($p) => $p !== ''));
-        $to = array_values(array_filter(explode('/', $toFile), fn ($p) => $p !== ''));
-
-        $common = 0;
-        $max = min(count($from), count($to));
-
-        while ($common < $max && $from[$common] === $to[$common]) {
-            $common++;
-        }
-
-        $ups = count($from) - $common;
-        $downs = array_slice($to, $common);
-        $parts = [...array_fill(0, $ups, '..'), ...$downs];
-        $rel = implode('/', $parts);
-
-        if ($rel === '') {
-            return '.';
-        }
-
-        return str_starts_with($rel, '.') ? $rel : './' . $rel;
     }
 }

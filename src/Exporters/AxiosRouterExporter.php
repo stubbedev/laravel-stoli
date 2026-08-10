@@ -8,6 +8,7 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\StoliException;
+use StubbeDev\LaravelStoli\Utils;
 use Throwable;
 
 use function Illuminate\Filesystem\join_paths;
@@ -57,8 +58,8 @@ final readonly class AxiosRouterExporter
         );
 
         $content = str_replace(
-            ['{{MODULE}}', '{{STUDLY}}'],
-            [$name, Str::studly($name)],
+            ['{{MODULE}}', '{{STUDLY}}', '{{STOLI}}'],
+            [$name, Str::studly($name), $this->stoliImportPath($path)],
             $stub
         );
 
@@ -68,5 +69,23 @@ final readonly class AxiosRouterExporter
         } catch (Throwable $error) {
             throw StoliException::cantExportModule($name, $error);
         }
+    }
+
+    /**
+     * The route service is written to the typescript-transformer output directory, which is
+     * not necessarily where this module lives — import it by its path relative to the router.
+     */
+    private function stoliImportPath(string $modulePath): string
+    {
+        $outputPath = $this->config->defaultOutputPath();
+
+        if ($outputPath === null) {
+            return './stoli';
+        }
+
+        return Utils::relativeImportPath(
+            Utils::absolutePath($modulePath),
+            join_paths(Utils::absolutePath($outputPath), 'stoli'),
+        );
     }
 }

@@ -200,14 +200,36 @@ const list = await Stoli.get("api.products.index");
 list.data; // typed as Record<string, unknown>
 ```
 
+#### File uploads
+
+Pass files as normal params — a body containing a `File`/`Blob` (or an array of them) is sent as
+`multipart/form-data`, serialized by axios. Params stay fully typed, so file fields are checked
+against the Data type (map `UploadedFile` to `File` in your typescript-transformer config):
+
+```typescript
+await Stoli.post("api.folders.files.store", { folder: 42, file, title: "Report" });
+```
+
+`post`, `put` and `patch` also accept a raw `FormData` for hand-built or deeply nested forms.
+Route parameters are read from the FormData and stripped from the body; axios sets the
+multipart `Content-Type` itself. No type checking on the fields in this form:
+
+```typescript
+const form = new FormData();
+form.append("folder", "42"); // fills {folder} in the URI
+form.append("files[]", file);
+
+await Stoli.post("api.folders.files.store", form); // POST /api/folders/42/files
+```
+
 Requires axios: `npm install axios`
 
 ### Route service methods
 
 | Method | Description |
 |--------|-------------|
-| `generateFullURL(name, params?)` | Full URL; leftover params are appended as query string |
-| `createURLWithoutQuery(name, params?)` | URL with only URI params substituted; no query string |
+| `generateFullURL(name, params?)` | Full URL; leftover params are appended as query string. Leaves `params` untouched |
+| `createURLWithoutQuery(name, params?)` | URL with only URI params substituted; no query string. **Deletes** the substituted keys from `params` so the rest can be used as a body — pass a copy if you still need it |
 | `has(name)` | Returns `true` if the route exists |
 
 ```typescript
@@ -217,6 +239,11 @@ api.generateFullURL("admin.products.show", { id: "abc-123", page: 2 });
 api.createURLWithoutQuery("admin.products.show", { id: "abc-123", page: 2 });
 // => https://example.com/api/admin/products/abc-123
 ```
+
+Both throw on a missing required parameter rather than emitting a literal `{id}` in the URL.
+Optional parameters (`{page?}`) may be omitted and take their path segment with them.
+Path and query values are URL-encoded; arrays become `tags[]=x&tags[]=y` for Laravel to read
+back as an array.
 
 ## Configuration
 

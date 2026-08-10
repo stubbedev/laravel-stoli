@@ -1,0 +1,59 @@
+/**
+ * Behaviour check for the shipped resources/stoli.stub — run with `node tests/routeservice.test.mjs`.
+ *
+ * The stub is plain JavaScript published verbatim into consumer projects, so it is loaded here
+ * as a data: module rather than copied, keeping this file honest about what actually ships.
+ */
+import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(new URL('../resources/stoli.stub', import.meta.url), 'utf8');
+const { RouteService, createRoute } = await import(`data:text/javascript,${encodeURIComponent(source)}`);
+
+const routes = {
+	'users.show': { uri: 'users/{user}', host: null },
+	'files.show': { uri: 'files/{path}', host: null },
+	'posts.index': { uri: 'posts/{page?}', host: null },
+	'tenant.home': { uri: '{tenant}/home', host: null },
+	search: { uri: 'search', host: null },
+};
+const route = createRoute({ routes });
+
+// Query values are encoded; arrays go out in the shape Laravel reads back as an array
+assert.strictEqual(route('search', { q: 'a b&c=d' }), '/search?q=a+b%26c%3Dd');
+assert.strictEqual(route('search', { tags: ['x', 'y z'] }), '/search?tags%5B%5D=x&tags%5B%5D=y+z');
+assert.strictEqual(route('search', { q: 'x', empty: null, gone: undefined }), '/search?q=x');
+
+// Path values are encoded
+assert.strictEqual(route('files.show', { path: 'my report.pdf' }), '/files/my%20report.pdf');
+
+// generateFullURL leaves the caller's object alone...
+const params = { user: 1, q: 'hi' };
+assert.strictEqual(route('users.show', params), '/users/1?q=hi');
+assert.deepStrictEqual(params, { user: 1, q: 'hi' }, 'generateFullURL must not mutate');
+
+// ...while createURLWithoutQuery consumes the path params, which the axios router relies on
+const consumed = { user: 1, name: 'x' };
+const service = new RouteService({ routes });
+assert.strictEqual(service.createURLWithoutQuery('users.show', consumed), '/users/1');
+assert.deepStrictEqual(consumed, { name: 'x' }, 'path params must leave the body');
+
+// rootUrl with or without a trailing slash
+assert.strictEqual(new RouteService({ routes, rootUrl: 'https://api.test/' }).generateFullURL('search'), 'https://api.test/search');
+assert.strictEqual(new RouteService({ routes, rootUrl: 'https://api.test' }).generateFullURL('search'), 'https://api.test/search');
+
+// A missing required parameter throws instead of shipping a literal {user} in the URL
+assert.throws(() => route('users.show', {}), /Missing required parameter "user" for route: users\.show/);
+assert.throws(() => route('users.show', { user: null }), /Missing required parameter/);
+
+// Optional parameters: given, and absent (the segment goes with it)
+assert.strictEqual(route('posts.index', { page: 2 }), '/posts/2');
+assert.strictEqual(route('posts.index'), '/posts');
+
+// A parameter at the start of the uri keeps its position
+assert.strictEqual(route('tenant.home', { tenant: 'acme' }), '/acme/home');
+
+// Unknown route still throws
+assert.throws(() => route('nope'), /Not found route: nope/);
+
+console.log('resources/stoli.stub: ok');

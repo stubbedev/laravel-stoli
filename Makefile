@@ -31,5 +31,10 @@ composer composer-install composer-update composer-require composer-require-modu
 			--no-ansi
 
 .PHONY: test
-test: composer-install
+test: composer-install test-js
 	docker run --rm -v $(PWD):/app -w /app $(IMAGE) vendor/bin/phpunit $(FILTER_TEST_OPTIONS) --testdox;
+
+# The published stub is plain JS, so it is checked with node instead of phpunit.
+.PHONY: test-js
+test-js:
+	node tests/routeservice.test.mjs

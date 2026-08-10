@@ -78,3 +78,8 @@ jobs:
       - name: Run tests for Laravel ${{ matrix.laravel }}
         if: steps.resolve.outputs.ok == 'true'
         run: vendor/bin/phpunit
+
+      # The published stub is plain JS; node is preinstalled on the runner.
+      - name: Check the route service stub
+        if: steps.resolve.outputs.ok == 'true'
+        run: node tests/routeservice.test.mjs

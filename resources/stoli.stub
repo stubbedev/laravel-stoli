@@ -16,13 +16,14 @@ export class RouteService {
 	}
 
 	generateFullURL(name, parameters = {}) {
-		return this.#create(name, parameters, { withQueryString: true });
+		// Copied: unlike createURLWithoutQuery, callers here keep their object intact
+		return this.#create(name, { ...parameters }, { withQueryString: true });
 	}
 
 	#create(name, parameters, options = { withQueryString: true }) {
 		const route = this.#find(name);
 		const hostname = this.#getHostname(route);
-		const path = this.#replaceNamedParameters(route.uri, parameters);
+		const path = this.#replaceNamedParameters(name, route.uri, parameters);
 		const qs = options.withQueryString ? this.#getRouteQueryString(parameters) : null;
 
 		return this.#buildUri(hostname, path, qs);
@@ -41,32 +42,52 @@ export class RouteService {
 	}
 
 	// eslint-disable-next-line class-methods-use-this
-	#replaceNamedParameters(uri, parameters) {
-		// eslint-disable-next-line no-param-reassign
-		uri = uri.replace(/{(.*?)\??}/g, (match, key) => {
-			if (!Object.prototype.hasOwnProperty.call(parameters, key)) {
-				return match;
+	#replaceNamedParameters(name, uri, parameters) {
+		// The leading slash is part of the match so an absent optional parameter
+		// takes its own path segment with it.
+		return uri.replace(/\/?{(\w+)(\??)}/g, (match, key, optional) => {
+			const value = Object.prototype.hasOwnProperty.call(parameters, key) ? parameters[key] : null;
+
+			if (value === null || value === undefined) {
+				if (!optional) {
+					throw new Error(`Missing required parameter "${key}" for route: ${name}`);
+				}
+
+				return '';
 			}
-			const value = parameters[key];
+
 			// eslint-disable-next-line no-param-reassign
 			delete parameters[key];
-			return value;
-		});
 
-		// Strip out any optional parameters that were not given
-		return uri.replace(/\/{.[^}]*?\?}/g, '');
+			return `${match.startsWith('/') ? '/' : ''}${encodeURIComponent(value)}`;
+		});
 	}
 
 	// eslint-disable-next-line class-methods-use-this
 	#getRouteQueryString(parameters) {
-		return Object.keys(parameters)
-			.map((key) => `${key}=${parameters[key]}`)
-			.join('&');
+		const query = new URLSearchParams();
+
+		Object.entries(parameters).forEach(([key, value]) => {
+			if (value === null || value === undefined) {
+				return;
+			}
+
+			// ponytail: arrays go out Laravel-style; nested objects are not handled — flatten them yourself
+			if (Array.isArray(value)) {
+				value.forEach((item) => query.append(`${key}[]`, item));
+
+				return;
+			}
+
+			query.append(key, value);
+		});
+
+		return query.toString();
 	}
 
 	// eslint-disable-next-line class-methods-use-this
 	#buildUri(hostname, path, queryString) {
-		return [`${hostname}/${path}`, queryString].filter((s) => s).join('?');
+		return [`${hostname.replace(/\/+$/, '')}/${path}`, queryString].filter((s) => s).join('?');
 	}
 }
 

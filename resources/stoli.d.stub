@@ -25,11 +25,22 @@ export class RouteService<Routes extends Record<string, Route> = Record<string, 
 
 	has<N extends keyof Routes & string>(name: N): boolean;
 
+	/**
+	 * Build the path only, and **delete** from `parameters` every key that went into it,
+	 * so the remainder can be sent as a query string or request body.
+	 *
+	 * Pass a copy if you still need the object afterwards. Throws when a required
+	 * parameter is missing.
+	 */
 	createURLWithoutQuery<N extends keyof Routes & string>(
 		name: N,
 		parameters?: RouteParams<Routes, N>,
 	): string;
 
+	/**
+	 * Build the full URL, query string included. Leaves `parameters` untouched.
+	 * Throws when a required parameter is missing.
+	 */
 	generateFullURL<N extends keyof Routes & string>(
 		name: N,
 		parameters?: RouteParams<Routes, N>,

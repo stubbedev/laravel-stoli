@@ -60,7 +60,7 @@ final readonly class RoutesFileExporter
             $absolutePath = str_starts_with($filePath, '/') ? $filePath : base_path($filePath);
             $this->formatter?->format([$absolutePath]);
 
-            $this->hashCache->record($file, $content);
+            $this->hashCache->record($file, $content, $filePath);
         } catch (Throwable $error) {
             throw StoliException::cantExportModule($file->name(), $error);
         }

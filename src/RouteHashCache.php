@@ -7,11 +7,10 @@ namespace StubbeDev\LaravelStoli;
 use Illuminate\Filesystem\Filesystem;
 use StubbeDev\LaravelStoli\Items\File;
 
-use function Illuminate\Filesystem\join_paths;
-
 /**
- * Stores a SHA-256 hash of each compiled route file's content so that
- * stoli:generate can skip re-writing files that have not changed.
+ * Records, for each generated route file, the SHA-256 hash of the compiled
+ * content and of the file left on disk after write and formatting, so that
+ * stoli:generate can skip re-writing files that already hold the output.
  *
  * Cache file location: <vendor/stubbedev/laravel-stoli>/.cache
  * Stored inside the package directory so it is invisible to the application
@@ -19,12 +18,7 @@ use function Illuminate\Filesystem\join_paths;
  */
 final readonly class RouteHashCache
 {
-    private array $stored;
-
-    public function __construct(private Filesystem $filesystem)
-    {
-        $this->stored = $this->load();
-    }
+    public function __construct(private Filesystem $filesystem) {}
 
     private function cachePath(): string
     {
@@ -33,27 +27,40 @@ final readonly class RouteHashCache
     }
 
     /**
-     * Returns true if $content is identical to the last written content for
-     * this file AND $writtenPath still exists on disk.
+     * Returns true when $content is identical to the content last compiled for
+     * this file AND the file on disk still holds the output that content
+     * produced. A change made by anything other than this generator - a git
+     * checkout, a merge, a hand edit - makes the file stale.
      */
     public function isUnchanged(File $file, string $content, string $writtenPath): bool
     {
-        $key = $this->key($file);
+        $entry = $this->load()[$this->key($file)] ?? null;
 
-        return isset($this->stored[$key])
-            && $this->stored[$key] === hash('sha256', $content)
-            && $this->filesystem->exists($writtenPath);
+        return is_array($entry)
+            && isset($entry['input'], $entry['output'])
+            && $entry['input'] === hash('sha256', $content)
+            && $this->filesystem->exists($writtenPath)
+            && $entry['output'] === hash('sha256', $this->filesystem->get($writtenPath));
     }
 
     /**
-     * Record the hash of content that was just written for $file.
+     * Record the compiled $content and the state of the file left on disk for $file.
      *
-     * Merges into what is on disk rather than the snapshot taken in the constructor,
-     * so recording one file does not drop the hashes recorded for its siblings.
+     * Merges into what is on disk, so recording one file does not drop the
+     * hashes recorded for its siblings.
      */
-    public function record(File $file, string $content): void
+    public function record(File $file, string $content, string $writtenPath): void
     {
-        $this->persist(array_merge($this->load(), [$this->key($file) => hash('sha256', $content)]));
+        $onDisk = $this->filesystem->exists($writtenPath)
+            ? $this->filesystem->get($writtenPath)
+            : $content;
+
+        $this->persist(array_merge($this->load(), [
+            $this->key($file) => [
+                'input' => hash('sha256', $content),
+                'output' => hash('sha256', $onDisk),
+            ],
+        ]));
     }
 
     private function key(File $file): string

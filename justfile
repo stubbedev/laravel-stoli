@@ -47,35 +47,45 @@ test: composer-install test-js
 test-js:
     node {{current_dir}}/tests/routeservice.test.mjs
 
-# Tag the current commit as the next patch release and push the tag.
-release-patch: (release "patch")
-
-# Tag the current commit as the next minor release and push the tag.
-release-minor: (release "minor")
-
-# Tag the current commit as the next major release and push the tag.
-release-major: (release "major")
-
-# Bump the latest vX.Y.Z tag by `part`, tag HEAD and push the tag. Packagist
-# picks the release up from the tag, so this is the whole release.
-release part='patch':
+# Show the next major/minor/patch versions.
+release-preview:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "Working tree is dirty - commit or stash first." >&2
+    v="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+    v="${v:-v0.0.0}"
+    IFS=. read -r maj min pat <<<"${v#v}"
+    echo "current: $v"
+    echo "patch:   v$maj.$min.$((pat + 1))"
+    echo "minor:   v$maj.$((min + 1)).0"
+    echo "major:   v$((maj + 1)).0.0"
+
+release-patch: (release "patch")
+release-minor: (release "minor")
+release-major: (release "major")
+
+# The latest tag is the single source of truth for the version: composer.json
+# carries none and Packagist publishes from the tag.
+# Bump it by `level`, run the gates, tag and push.
+release level:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "working tree is dirty — commit or stash first" >&2
         exit 1
     fi
     git fetch --tags --quiet
-    latest=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
-    latest=${latest:-v0.0.0}
-    IFS=. read -r major minor patch <<< "${latest#v}"
-    case "{{part}}" in
-        patch) patch=$((patch + 1)) ;;
-        minor) minor=$((minor + 1)); patch=0 ;;
-        major) major=$((major + 1)); minor=0; patch=0 ;;
-        *) echo "Unknown release part: {{part}}" >&2; exit 1 ;;
+    v="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+    v="${v:-v0.0.0}"
+    IFS=. read -r maj min pat <<<"${v#v}"
+    case "{{ level }}" in
+        patch) new="$maj.$min.$((pat + 1))" ;;
+        minor) new="$maj.$((min + 1)).0" ;;
+        major) new="$((maj + 1)).0.0" ;;
+        *) echo "unknown level: {{ level }}" >&2; exit 1 ;;
     esac
-    next="v$major.$minor.$patch"
-    echo "Releasing $next (previous $latest)"
-    git tag -a "$next" -m "$next"
-    git push origin "$next"
+    echo "releasing $v -> v$new"
+    just test
+    git tag "v$new"
+    git push origin HEAD
+    git push origin "v$new"
+    echo "released v$new"

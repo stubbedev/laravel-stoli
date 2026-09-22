@@ -32,7 +32,7 @@ final readonly class RouteHashCache
      * produced. A change made by anything other than this generator - a git
      * checkout, a merge, a hand edit - makes the file stale.
      */
-    public function isUnchanged(File $file, string $content, string $writtenPath): bool
+    public function isUnchanged(File|string $file, string $content, string $writtenPath): bool
     {
         $entry = $this->load()[$this->key($file)] ?? null;
 
@@ -49,7 +49,7 @@ final readonly class RouteHashCache
      * Merges into what is on disk, so recording one file does not drop the
      * hashes recorded for its siblings.
      */
-    public function record(File $file, string $content, string $writtenPath): void
+    public function record(File|string $file, string $content, string $writtenPath): void
     {
         $onDisk = $this->filesystem->exists($writtenPath)
             ? $this->filesystem->get($writtenPath)
@@ -63,9 +63,13 @@ final readonly class RouteHashCache
         ]));
     }
 
-    private function key(File $file): string
+    /**
+     * Files are keyed by their destination; anything else generated into the same
+     * tree - the constants file - passes that key in directly.
+     */
+    private function key(File|string $file): string
     {
-        return $file->path().'/'.$file->name();
+        return is_string($file) ? $file : $file->path().'/'.$file->name();
     }
 
     private function load(): array

@@ -25,6 +25,17 @@ final class StoliException extends RuntimeException
         );
     }
 
+    public static function cantExportConstants(?Throwable $previous = null): self
+    {
+        $errorMessage = $previous?->getMessage() ?? 'unknown';
+
+        return new self(
+            "Could not export constants: $errorMessage",
+            $previous?->getCode() ?? 0,
+            $previous
+        );
+    }
+
     public static function cantOverrideLibrary(?Throwable $previous = null): self
     {
         $errorMessage = $previous?->getMessage() ?? 'unknown';

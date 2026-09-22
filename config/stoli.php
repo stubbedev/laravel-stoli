@@ -35,6 +35,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Constants
+    |--------------------------------------------------------------------------
+    |
+    | PHP classes carrying one of the attributes below have their public
+    | constants exported to a TypeScript file, with the PHP namespace mirrored
+    | as nested objects: a constant on App\Support\Permission is reachable as
+    | App.Support.Permission.VIEW, alongside a union type of its values.
+    |
+    | enabled    - Set to false to skip constant generation entirely.
+    | name       - The name of the generated file (without extension).
+    | path       - Destination directory. Defaults to the typescript-transformer
+    |              output directory, next to stoli.js and the route files.
+    | paths      - Directories scanned for attributed classes. Defaults to the
+    |              directories the typescript-transformer discovers types in.
+    | attributes - The class attributes that opt a class in. Narrow this to
+    |              Stoli's own attribute to keep #[TypeScript] classes that
+    |              happen to hold constants out of the generated file.
+    |
+    */
+    'constants' => [
+        'enabled' => true,
+        'name' => 'constants',
+        'path' => null,
+        'paths' => null,
+        'attributes' => [
+            StubbeDev\LaravelStoli\Attributes\TypeScriptConstants::class,
+            Spatie\TypeScriptTransformer\Attributes\TypeScript::class,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Single Output Configuration
     |--------------------------------------------------------------------------
     |

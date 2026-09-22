@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli;
 
+use Spatie\TypeScriptTransformer\Attributes\TypeScript;
 use Spatie\TypeScriptTransformer\Writers\GlobalNamespaceWriter;
+use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
 use Throwable;
+
+use function app_path;
 
 final class StoliConfig
 {
@@ -34,6 +38,92 @@ final class StoliConfig
     public function axiosRouter(): bool
     {
         return $this->config['axios'] ?? false;
+    }
+
+    public function constants(): bool
+    {
+        return $this->config['constants']['enabled'] ?? true;
+    }
+
+    public function constantsFileName(): string
+    {
+        $name = $this->config['constants']['name'] ?? null;
+
+        return is_string($name) && $name !== '' ? $name : 'constants';
+    }
+
+    /**
+     * Where the constants file is written; the typescript-transformer output
+     * directory unless the module config overrides it.
+     */
+    public function constantsPath(): ?string
+    {
+        $path = $this->config['constants']['path'] ?? null;
+
+        return is_string($path) && $path !== '' ? $path : $this->defaultOutputPath();
+    }
+
+    /**
+     * The attributes a class must carry to have its constants exported.
+     *
+     * @return list<string>
+     */
+    public function constantsAttributes(): array
+    {
+        $attributes = $this->config['constants']['attributes'] ?? null;
+
+        if (! is_array($attributes)) {
+            return [TypeScriptConstants::class, TypeScript::class];
+        }
+
+        return array_values(array_filter($attributes, is_string(...)));
+    }
+
+    /**
+     * The directories scanned for attributed classes. Falls back to the
+     * directories the typescript-transformer itself discovers types in, so
+     * constants are picked up wherever the enums already are.
+     *
+     * @return list<string>
+     */
+    public function constantsPaths(): array
+    {
+        $configured = $this->config['constants']['paths'] ?? null;
+
+        if (is_array($configured) && $configured !== []) {
+            return array_values(array_map(
+                Utils::absolutePath(...),
+                array_filter($configured, is_string(...))
+            ));
+        }
+
+        $discovered = $this->transformerDirectories();
+
+        if ($discovered !== []) {
+            return $discovered;
+        }
+
+        return function_exists('app_path') ? [app_path()] : [];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function transformerDirectories(): array
+    {
+        try {
+            $spatieConfig = app('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig');
+        } catch (Throwable) {
+            return [];
+        }
+
+        $directories = $spatieConfig->directoriesToWatch ?? null;
+
+        if (! is_array($directories)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter($directories, is_string(...))));
     }
 
     /**

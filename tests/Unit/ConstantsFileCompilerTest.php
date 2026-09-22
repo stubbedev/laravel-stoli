@@ -1,0 +1,137 @@
+<?php
+
+declare(strict_types=1);
+
+namespace StubbeDev\LaravelStoli\Tests\Unit;
+
+use PHPUnit\Framework\TestCase;
+use StubbeDev\LaravelStoli\Compilers\ConstantsFileCompiler;
+use StubbeDev\LaravelStoli\Items\ConstantGroup;
+use StubbeDev\LaravelStoli\Tests\Fixtures\Constants\Status;
+
+final class ConstantsFileCompilerTest extends TestCase
+{
+    /**
+     * @param  list<string>  $namespace
+     * @param  array<string, mixed>  $constants
+     */
+    private function group(array $namespace, string $name, array $constants): ConstantGroup
+    {
+        return new ConstantGroup(
+            className: implode('\\', [...$namespace, $name]),
+            namespace: $namespace,
+            name: $name,
+            constants: $constants,
+        );
+    }
+
+    private function compile(ConstantGroup ...$groups): string
+    {
+        return (new ConstantsFileCompiler)->compile(array_values($groups));
+    }
+
+    public function test_it_mirrors_the_php_namespace_as_nested_objects(): void
+    {
+        $output = $this->compile(
+            $this->group(['App', 'Support'], 'Permission', ['VIEW' => 'view'])
+        );
+
+        $this->assertStringContainsString("export const App = {\n\tSupport: {\n\t\tPermission: {\n\t\t\tVIEW: 'view',\n\t\t},\n\t},\n} as const;", $output);
+        $this->assertStringContainsString(
+            'export type Permission = (typeof App.Support.Permission)[keyof typeof App.Support.Permission];',
+            $output
+        );
+    }
+
+    public function test_classes_without_a_namespace_land_at_the_top_level(): void
+    {
+        $output = $this->compile($this->group([], 'Permission', ['VIEW' => 'view']));
+
+        $this->assertStringContainsString("export const Permission = {\n\tVIEW: 'view',\n} as const;", $output);
+        $this->assertStringContainsString('export type Permission2 = (typeof Permission)[keyof typeof Permission];', $output);
+    }
+
+    public function test_it_renders_every_scalar_shape(): void
+    {
+        $output = $this->compile($this->group(['App'], 'Values', [
+            'TEXT' => "it's\nfine",
+            'COUNT' => 42,
+            'RATIO' => 1.5,
+            'ENABLED' => true,
+            'DISABLED' => false,
+            'MISSING' => null,
+        ]));
+
+        $this->assertStringContainsString("TEXT: 'it\\'s\\nfine',", $output);
+        $this->assertStringContainsString('COUNT: 42,', $output);
+        $this->assertStringContainsString('RATIO: 1.5,', $output);
+        $this->assertStringContainsString('ENABLED: true,', $output);
+        $this->assertStringContainsString('DISABLED: false,', $output);
+        $this->assertStringContainsString('MISSING: null,', $output);
+    }
+
+    public function test_it_renders_arrays_as_lists_and_objects(): void
+    {
+        $output = $this->compile($this->group(['App'], 'Values', [
+            'TAGS' => ['a', 'b'],
+            'LEVELS' => ['low' => 1, 'high' => 2],
+            'QUOTED' => ['a-key' => 'value'],
+            'EMPTY_LIST' => [],
+        ]));
+
+        $this->assertStringContainsString("TAGS: [\n\t\t\t'a',\n\t\t\t'b',\n\t\t],", $output);
+        $this->assertStringContainsString("LEVELS: {\n\t\t\tlow: 1,\n\t\t\thigh: 2,\n\t\t},", $output);
+        $this->assertStringContainsString("QUOTED: {\n\t\t\t'a-key': 'value',\n\t\t},", $output);
+        $this->assertStringContainsString('EMPTY_LIST: [],', $output);
+    }
+
+    public function test_enum_cases_are_rendered_as_their_backing_value(): void
+    {
+        $output = $this->compile($this->group(['App'], 'Values', ['DEFAULT' => Status::Draft]));
+
+        $this->assertStringContainsString("DEFAULT: 'draft',", $output);
+    }
+
+    public function test_constants_without_a_typescript_equivalent_are_left_out(): void
+    {
+        $output = $this->compile($this->group(['App'], 'Values', [
+            'OBJECT' => new \stdClass,
+            'CLOSURE_LESS' => 'kept',
+        ]));
+
+        $this->assertStringNotContainsString('OBJECT', $output);
+        $this->assertStringContainsString("CLOSURE_LESS: 'kept',", $output);
+    }
+
+    public function test_a_group_whose_constants_are_all_unrenderable_is_dropped(): void
+    {
+        $this->assertSame('', $this->compile($this->group(['App'], 'Values', ['OBJECT' => new \stdClass])));
+    }
+
+    public function test_nothing_is_emitted_when_nothing_was_discovered(): void
+    {
+        $this->assertSame('', (new ConstantsFileCompiler)->compile([]));
+    }
+
+    public function test_colliding_type_names_take_in_enclosing_namespace_segments(): void
+    {
+        $output = $this->compile(
+            $this->group(['App', 'Store'], 'Status', ['OPEN' => 'open']),
+            $this->group(['App', 'Admin'], 'Status', ['LOCKED' => 'locked']),
+        );
+
+        $this->assertStringContainsString('export type Status = (typeof App.Store.Status)[keyof typeof App.Store.Status];', $output);
+        $this->assertStringContainsString('export type AdminStatus = (typeof App.Admin.Status)[keyof typeof App.Admin.Status];', $output);
+    }
+
+    public function test_a_class_colliding_with_a_namespace_does_not_overwrite_it(): void
+    {
+        $output = $this->compile(
+            $this->group(['App', 'Support'], 'Permission', ['VIEW' => 'view']),
+            $this->group(['App'], 'Support', ['NOPE' => 'nope']),
+        );
+
+        $this->assertStringContainsString("VIEW: 'view',", $output);
+        $this->assertStringNotContainsString('NOPE', $output);
+    }
+}

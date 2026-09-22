@@ -9,6 +9,7 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\ServiceProvider;
 use Spatie\TypeScriptTransformer\Formatters\Formatter;
 use StubbeDev\LaravelStoli\Console\Command\StoliGenerateCommand;
+use StubbeDev\LaravelStoli\Exporters\ConstantsExporter;
 use StubbeDev\LaravelStoli\Exporters\RoutesFileExporter;
 use StubbeDev\LaravelStoli\Matchers\StartsWithRouteMatcher;
 use StubbeDev\LaravelStoli\Normalizers\MultipleFilesNormalizer;
@@ -53,6 +54,19 @@ final class StoliServiceProvider extends ServiceProvider
                     $application->make(Normalizer::class),
                     $application->make(Filesystem::class),
                     $application->make(FileRouteBuilder::class),
+                    $application->make(RouteHashCache::class),
+                    $this->resolveFormatter($application),
+                );
+            }
+        );
+
+        $this->app->singleton(
+            ConstantsExporter::class,
+            function (Application $application) {
+                return new ConstantsExporter(
+                    $application->make(Filesystem::class),
+                    $application->make(StoliConfig::class),
+                    $application->make(ConstantGroupBuilder::class),
                     $application->make(RouteHashCache::class),
                     $this->resolveFormatter($application),
                 );

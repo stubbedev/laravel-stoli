@@ -41,6 +41,7 @@ php artisan stoli:generate         # generates route files referencing those typ
 - `stoli.js` — the `RouteService` runtime
 - `stoli.d.ts` — TypeScript declarations
 - `api.ts` (or one file per module) — typed route definitions
+- `constants.ts` — the constants of the classes marked with `#[TypeScriptConstants]`
 
 ## Usage
 
@@ -178,6 +179,74 @@ php artisan typescript:transform
 php artisan stoli:generate
 ```
 
+### Typed constants
+
+PHP classes marked with `#[TypeScriptConstants]` have their public constants exported to
+`constants.ts`, discovered the same way the typescript-transformer discovers the classes and
+enums it transforms — by scanning the configured directories for the attribute.
+
+```php
+namespace App\Support;
+
+use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
+
+#[TypeScriptConstants]
+final class Permission
+{
+    public const VIEW = 'view';
+    public const EDIT = 'edit';
+}
+```
+
+The PHP namespace is mirrored as nested objects, and each class also gets a union type of its
+values:
+
+```typescript
+export const App = {
+	Support: {
+		Permission: {
+			VIEW: 'view',
+			EDIT: 'edit',
+		},
+	},
+} as const;
+
+export type Permission = (typeof App.Support.Permission)[keyof typeof App.Support.Permission];
+```
+
+```typescript
+import { App, type Permission } from "./constants";
+
+App.Support.Permission.VIEW;          // 'view'
+const granted: Permission = 'edit';   // 'view' | 'edit'
+```
+
+Only public constants declared on the class itself are exported — inherited and interface
+constants belong to the class that declares them. Enums are skipped: they are already
+transformed to TypeScript by `typescript:transform`.
+
+`#[TypeScriptConstants('Boundaries')]` publishes the class under a different key. When two
+classes share a basename, the second type alias takes in its enclosing namespace segment
+(`AdminStatus`) so both remain exported.
+
+Classes carrying spatie's `#[TypeScript]` attribute are picked up as well, so a class that is
+already transformed for its types contributes its constants too. Narrow `constants.attributes`
+in `config/stoli.php` to Stoli's own attribute to opt out of that.
+
+#### Supported constant values
+
+| PHP value | TypeScript |
+|---|---|
+| `string`, `int`, `float`, `bool`, `null` | the literal value |
+| List array | array literal |
+| Associative array | object literal |
+| Backed enum case | its backing value |
+| Pure enum case | its case name as a string |
+| `JsonSerializable` | its serialized value |
+
+Constants holding anything else — a plain object, a resource — are left out, and a class left
+without a single exportable constant is dropped from the file.
+
 ### Axios router (optional)
 
 Enable in `config/stoli.php`:
@@ -255,6 +324,16 @@ return [
     'axios'  => false,       // generate axios router wrapper
     'single' => [            // used when split = false
         'name' => 'api',     // output filename (without extension)
+    ],
+    'constants' => [
+        'enabled'    => true,          // false = skip constant generation
+        'name'       => 'constants',   // output filename (without extension)
+        'path'       => null,          // defaults to typescript-transformer output dir
+        'paths'      => null,          // dirs scanned; defaults to the transformer's own
+        'attributes' => [              // the attributes that opt a class in
+            StubbeDev\LaravelStoli\Attributes\TypeScriptConstants::class,
+            Spatie\TypeScriptTransformer\Attributes\TypeScript::class,
+        ],
     ],
     'modules' => [
         [

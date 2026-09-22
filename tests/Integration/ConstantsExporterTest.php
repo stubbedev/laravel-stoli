@@ -106,12 +106,15 @@ final class ConstantsExporterTest extends TestCase
         $exporter = self::create(ConstantsExporter::class);
 
         $exporter->publish();
+        // touch() does not invalidate PHP's stat cache on every version, so the
+        // pinned mtime has to be read past it.
         touch(self::generatedFile(), time() - 60);
+        clearstatcache(true, self::generatedFile());
         $before = filemtime(self::generatedFile());
 
         $exporter->publish();
 
-        clearstatcache();
+        clearstatcache(true, self::generatedFile());
         $this->assertSame($before, filemtime(self::generatedFile()));
     }
 

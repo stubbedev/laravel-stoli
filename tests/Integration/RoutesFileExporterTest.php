@@ -87,10 +87,13 @@ final class RoutesFileExporterTest extends TestCase
         $path = self::tmp().'/types/api.ts';
 
         // A write bumps mtime, so pinning it lets the test observe the skip.
+        // touch() does not invalidate PHP's stat cache on every version.
         touch($path, 100);
+        clearstatcache(true, $path);
 
         self::create(RoutesFileExporter::class)->publish();
 
+        clearstatcache(true, $path);
         self::assertSame(100, filemtime($path));
         self::assertSame($content, (new Filesystem)->get($path));
     }

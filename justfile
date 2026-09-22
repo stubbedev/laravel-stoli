@@ -1,6 +1,6 @@
 current_dir := justfile_directory()
 
-image := "php-price-engine"
+image := "laravel-stoli"
 
 composer_image := "composer:2.3.7"
 
@@ -39,8 +39,9 @@ composer composer_args='install' docker_flags='':
 deps: composer-install
 
 # Run phpunit inside the built image and check the published stub with node.
+# Depends on build: the image holds the sources, so it has to exist and be current.
 # Test filtering goes through the environment: FILTER_TEST_OPTIONS=--filter=x just test
-test: composer-install test-js
+test: build test-js
     docker run --rm -v {{current_dir}}:/app -w /app {{image}} vendor/bin/phpunit ${FILTER_TEST_OPTIONS:-} --testdox
 
 # The published stub is plain JS, so it is checked with node instead of phpunit.

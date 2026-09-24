@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli\Normalizers;
 
-use StubbeDev\LaravelStoli\Support\ArrayList;
+use Illuminate\Support\Collection;
 
 final readonly class MultipleFilesNormalizer implements Normalizer
 {
-    public function normalize(ArrayList $files): ArrayList
+    public function normalize(Collection $files): Collection
     {
         return $files;
     }

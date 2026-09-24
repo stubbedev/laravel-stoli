@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli\Items;
 
-use StubbeDev\LaravelStoli\Utils;
-
-use function array_filter;
-
-readonly class Route
+final readonly class Route
 {
+    /**
+     * @param  string|null  $host  the route's own domain, e.g. {account}.example.com
+     * @param  array<string, string>  $wheres  parameter name => regex constraint
+     * @param  list<string>  $methods
+     */
     public function __construct(
         private string $name,
         private string $rootUrl,
@@ -20,10 +21,8 @@ readonly class Route
         private array $wheres = [],
         private array $methods = [],
         private ?string $stripPrefix = null,
-        /** @var array{type: string, file: string}|null */
-        private ?array $dataRequestType = null,
-        /** @var array{type: string, file: string}|null */
-        private ?array $dataResponseType = null,
+        private ?DataType $dataRequestType = null,
+        private ?DataType $dataResponseType = null,
     ) {}
 
     public function name(): string
@@ -35,57 +34,66 @@ readonly class Route
         return $this->name;
     }
 
-    public function originalName(): string
-    {
-        return $this->name;
-    }
-
+    /**
+     * The scheme and host URLs are built on, or null for relative URLs.
+     *
+     * A route domain carries no scheme, so it borrows the root URL's; without one it
+     * is emitted protocol-relative, which a browser resolves against the page.
+     */
     public function host(): ?string
     {
-        return $this->absolute ? Utils::removeForwardSlashes($this->host ?? $this->rootUrl) : null;
+        if (! $this->absolute) {
+            return null;
+        }
+
+        if ($this->host === null || $this->host === '') {
+            return trim($this->rootUrl, '/');
+        }
+
+        $host = trim($this->host, '/');
+
+        if (str_contains($host, '://')) {
+            return $host;
+        }
+
+        $scheme = parse_url($this->rootUrl, PHP_URL_SCHEME);
+
+        return (is_string($scheme) ? "{$scheme}:" : '')."//{$host}";
     }
 
     public function uri(): string
     {
         $segments = array_filter([
-            Utils::removeForwardSlashes($this->prefix),
-            Utils::removeForwardSlashes($this->uri),
-        ]);
+            trim($this->prefix ?? '', '/'),
+            trim($this->uri, '/'),
+        ], static fn (string $segment): bool => $segment !== '');
 
         return implode('/', $segments);
     }
 
+    /**
+     * @return array<string, string>
+     */
     public function wheres(): array
     {
         return $this->wheres;
     }
 
+    /**
+     * @return list<string>
+     */
     public function methods(): array
     {
         return $this->methods;
     }
 
-    /**
-     * @return array{type: string, file: string}|null
-     */
-    public function dataRequestType(): ?array
+    public function dataRequestType(): ?DataType
     {
         return $this->dataRequestType;
     }
 
-    /**
-     * @return array{type: string, file: string}|null
-     */
-    public function dataResponseType(): ?array
+    public function dataResponseType(): ?DataType
     {
         return $this->dataResponseType;
-    }
-
-    public function primitives(): array
-    {
-        return [
-            'host' => $this->host(),
-            'uri' => $this->uri(),
-        ];
     }
 }

@@ -16,8 +16,8 @@ type ExtractParams<T extends string> =
 export type RouteParams<
 	Routes extends Record<string, Route>,
 	N extends keyof Routes,
-> = Routes[N] extends { uri: infer U extends string }
-	? Partial<Record<ExtractParams<U>, string | number>> & Record<string, unknown>
+> = Routes[N] extends { uri: infer U extends string; host: infer H }
+	? Partial<Record<ExtractParams<U> | (H extends string ? ExtractParams<H> : never), string | number>> & Record<string, unknown>
 	: Record<string, unknown>;
 
 export class RouteService<Routes extends Record<string, Route> = Record<string, Route>> {

@@ -18,4 +18,9 @@ final class Permission
     protected const HIDDEN = 'protected';
 
     private const SECRET = 'private';
+
+    public function secret(): string
+    {
+        return self::SECRET;
+    }
 }

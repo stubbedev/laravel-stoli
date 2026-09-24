@@ -6,6 +6,9 @@ namespace StubbeDev\LaravelStoli\Exporters;
 
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
+use StubbeDev\LaravelStoli\GeneratedFileWriter;
+use StubbeDev\LaravelStoli\Items\Module;
+use StubbeDev\LaravelStoli\ModulesProvider;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\StoliException;
 use StubbeDev\LaravelStoli\Utils;
@@ -18,11 +21,20 @@ final readonly class AxiosRouterExporter
     public function __construct(
         private Filesystem $filesystem,
         private StoliConfig $config,
+        private ModulesProvider $modules,
+        private GeneratedFileWriter $writer,
     ) {}
 
     public function publish(): void
     {
         if (! $this->config->axiosRouter()) {
+            return;
+        }
+
+        // Standalone modules are not an API and get no router.
+        $routed = $this->modules->modules()->reject(static fn (Module $module): bool => $module->standalone());
+
+        if ($routed->isEmpty()) {
             return;
         }
 
@@ -36,17 +48,14 @@ final readonly class AxiosRouterExporter
             return;
         }
 
-        $modules = array_filter(
-            $this->config->modules(),
-            static fn (array $module): bool => ! ($module['standalone'] ?? false),
-        );
-        $multiple = count($modules) > 1;
+        $multiple = $routed->count() > 1;
 
-        foreach ($modules as $module) {
-            $name = $module['name'];
-            $path = $module['path'] ?? $this->config->defaultOutputPath();
-            $filename = $multiple ? "{$name}.router.ts" : 'router.ts';
-            $this->generate($name, $path, $filename);
+        foreach ($routed as $module) {
+            $this->generate(
+                $module->name(),
+                $module->path(),
+                $multiple ? "{$module->name()}.router.ts" : 'router.ts',
+            );
         }
     }
 
@@ -56,19 +65,14 @@ final readonly class AxiosRouterExporter
             return;
         }
 
-        $stub = $this->filesystem->get(
-            join_paths($this->config->resourcesPath(), 'stoli.router.stub')
-        );
-
-        $content = str_replace(
-            ['{{MODULE}}', '{{STUDLY}}', '{{STOLI}}'],
-            [$name, Str::studly($name), $this->stoliImportPath($path)],
-            $stub
-        );
-
         try {
-            $this->filesystem->makeDirectory($path, 0755, true, true);
-            $this->filesystem->put(join_paths($path, $filename), $content);
+            $content = str_replace(
+                ['{{MODULE}}', '{{STUDLY}}', '{{STOLI}}'],
+                [$name, Str::studly($name), $this->stoliImportPath($path)],
+                $this->filesystem->get(join_paths($this->config->resourcesPath(), 'stoli.router.stub'))
+            );
+
+            $this->writer->write(join_paths($path, $filename), $content, format: false);
         } catch (Throwable $error) {
             throw StoliException::cantExportModule($name, $error);
         }

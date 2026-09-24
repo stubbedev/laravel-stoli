@@ -7,6 +7,7 @@ namespace StubbeDev\LaravelStoli;
 use ReflectionClass;
 use Spatie\StructureDiscoverer\Discover;
 use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
+use StubbeDev\LaravelStoli\Compilers\TypeScript;
 use StubbeDev\LaravelStoli\Items\ConstantGroup;
 use Throwable;
 
@@ -45,6 +46,8 @@ final readonly class ConstantGroupBuilder
             return [];
         }
 
+        $classes = array_filter($classes, is_string(...));
+
         // Sorted so the generated file does not churn with the filesystem order.
         sort($classes);
 
@@ -61,13 +64,16 @@ final readonly class ConstantGroupBuilder
         return $groups;
     }
 
+    /**
+     * @throws StoliException when a class publishes its constants under a name that is not an identifier
+     */
     private function group(string $class): ?ConstantGroup
     {
-        try {
-            $reflection = new ReflectionClass($class);
-        } catch (Throwable) {
+        if (! class_exists($class)) {
             return null;
         }
+
+        $reflection = new ReflectionClass($class);
 
         // Enum cases are already exported as types by the typescript-transformer.
         if ($reflection->isEnum()) {
@@ -104,6 +110,12 @@ final readonly class ConstantGroupBuilder
         );
     }
 
+    /**
+     * The key the constants are published under. It also names the union type, so
+     * it has to be a TypeScript identifier.
+     *
+     * @param  ReflectionClass<object>  $reflection
+     */
     private function name(ReflectionClass $reflection): string
     {
         foreach ($reflection->getAttributes(TypeScriptConstants::class) as $attribute) {
@@ -113,9 +125,15 @@ final readonly class ConstantGroupBuilder
                 continue;
             }
 
-            if (is_string($name) && $name !== '') {
-                return $name;
+            if ($name === null || $name === '') {
+                continue;
             }
+
+            if (! TypeScript::isIdentifier($name)) {
+                throw StoliException::invalidConstantsName($reflection->getName(), $name);
+            }
+
+            return $name;
         }
 
         return class_basename($reflection->getName());

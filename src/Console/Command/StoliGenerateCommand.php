@@ -8,7 +8,7 @@ use Illuminate\Console\Command;
 use StubbeDev\LaravelStoli\Publisher;
 use StubbeDev\LaravelStoli\StoliException;
 
-class StoliGenerateCommand extends Command
+final class StoliGenerateCommand extends Command
 {
     protected $signature = 'stoli:generate';
 
@@ -18,13 +18,14 @@ class StoliGenerateCommand extends Command
     {
         try {
             $publisher->publish();
-            $this->info('Routes published');
         } catch (StoliException $exception) {
-            $this->error('Sorry we have an exception: '.$exception->getMessage());
+            $this->error('Could not generate the Stoli files: '.$exception->getMessage());
 
-            return 1;
+            return self::FAILURE;
         }
 
-        return 0;
+        $this->info('Routes published');
+
+        return self::SUCCESS;
     }
 }

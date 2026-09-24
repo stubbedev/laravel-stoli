@@ -43,14 +43,7 @@ final class AxiosRouterExporterTest extends TestCase
     {
         parent::setUp();
 
-        // StoliConfig duck-types this object, so a stand-in with the one property is enough.
-        $this->app->instance('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig', new class
-        {
-            public string $outputDirectory;
-        });
-
-        $this->app->make('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig')
-            ->outputDirectory = self::tmp().'/types';
+        self::useTransformerOutputDirectory(self::tmp().'/types');
     }
 
     protected function tearDown(): void
@@ -79,8 +72,7 @@ final class AxiosRouterExporterTest extends TestCase
 
     public function test_it_uses_a_plain_relative_import_when_both_land_in_the_same_directory(): void
     {
-        $this->app->make('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig')
-            ->outputDirectory = self::tmp().'/routes';
+        self::useTransformerOutputDirectory(self::tmp().'/routes');
 
         self::assertStringContainsString("from './stoli'", $this->generated());
     }

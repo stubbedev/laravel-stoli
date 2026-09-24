@@ -6,26 +6,22 @@ namespace StubbeDev\LaravelStoli\Items;
 
 use Illuminate\Support\Str;
 
-use function ltrim;
-
 final readonly class Module
 {
-    private string $match;
-
+    /**
+     * @param  list<string>|null  $names  `Str::is` patterns a route name must match; null lets every name through
+     */
     public function __construct(
-        string $match,
+        private string $match,
         private string $rootUrl,
         private string $name,
         private string $prefix,
         private ?string $path,
         private bool $absolute,
         private ?string $stripPrefix = null,
-        /** @var list<string>|null */
         private ?array $names = null,
         private bool $standalone = false,
-    ) {
-        $this->match = ltrim($match, '/');
-    }
+    ) {}
 
     public function match(): string
     {
@@ -63,10 +59,6 @@ final readonly class Module
     }
 
     /**
-     * Whether a route name passes the module's `names` filter. No filter lets every
-     * name through; otherwise the name must match one of the `Str::is` patterns.
-     */
-    /**
      * A standalone module keeps its own file even when `split` is off, and gets no
      * axios router: for routes that are not an API, such as a single-page app's pages.
      */
@@ -75,6 +67,10 @@ final readonly class Module
         return $this->standalone;
     }
 
+    /**
+     * Whether a route name passes the module's `names` filter. No filter lets every
+     * name through; otherwise the name must match one of the `Str::is` patterns.
+     */
     public function matchesName(string $name): bool
     {
         return $this->names === null || Str::is($this->names, $name);

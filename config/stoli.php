@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -99,7 +101,8 @@ return [
             |--------------------------------------------------------------------------
             |
             | Specify which routes should be included. Use '*' to include all routes,
-            | or provide a specific path to match (e.g., '/api') to filter routes.
+            | or provide a path (e.g., '/api') to include the routes at or under it:
+            | '/api' matches 'api' and 'api/users', but not 'apidocs'.
             |
             */
             'match' => '*',

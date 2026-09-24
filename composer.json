@@ -33,7 +33,8 @@
   "require-dev": {
     "phpunit/phpunit": "^11.5|^12",
     "orchestra/testbench": "^10|^11",
-    "mockery/mockery": "^1.6"
+    "mockery/mockery": "^1.6",
+    "larastan/larastan": "^3"
   },
   "extra": {
     "laravel": {

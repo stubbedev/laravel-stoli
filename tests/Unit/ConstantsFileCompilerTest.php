@@ -151,4 +151,24 @@ final class ConstantsFileCompilerTest extends TestCase
         $this->assertStringContainsString("VIEW: 'view',", $output);
         $this->assertStringNotContainsString('NOPE', $output);
     }
+
+    public function test_a_skipped_group_gets_no_type_alias(): void
+    {
+        // Namespace first: the class sharing the namespace's path is skipped.
+        $output = $this->compile(
+            $this->group(['App', 'Support'], 'Permission', ['VIEW' => 'view']),
+            $this->group(['App'], 'Support', ['NOPE' => 'nope']),
+        );
+
+        $this->assertStringNotContainsString('export type Support', $output);
+
+        // Class first: the class nested under it cannot be reached and is skipped.
+        $output = $this->compile(
+            $this->group(['App'], 'Support', ['KEEP' => 'keep']),
+            $this->group(['App', 'Support'], 'Permission', ['VIEW' => 'view']),
+        );
+
+        $this->assertStringContainsString("KEEP: 'keep',", $output);
+        $this->assertStringNotContainsString('Permission', $output);
+    }
 }

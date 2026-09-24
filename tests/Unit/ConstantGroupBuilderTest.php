@@ -9,12 +9,15 @@ use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
 use StubbeDev\LaravelStoli\ConstantGroupBuilder;
 use StubbeDev\LaravelStoli\Items\ConstantGroup;
 use StubbeDev\LaravelStoli\StoliConfig;
+use StubbeDev\LaravelStoli\StoliException;
+use StubbeDev\LaravelStoli\Tests\Fixtures\InvalidConstants\BadName;
 
 final class ConstantGroupBuilderTest extends TestCase
 {
     private const FIXTURES = __DIR__.'/../Fixtures/Constants';
 
     /**
+     * @param  array<string, mixed>  $constants
      * @return array<string, ConstantGroup>
      */
     private function discover(array $constants = []): array
@@ -84,5 +87,19 @@ final class ConstantGroupBuilderTest extends TestCase
         ]));
 
         $this->assertSame([], $builder->groups());
+    }
+
+    public function test_a_name_that_is_not_an_identifier_is_rejected(): void
+    {
+        $builder = new ConstantGroupBuilder(new StoliConfig([
+            'constants' => [
+                'paths' => [__DIR__.'/../Fixtures/InvalidConstants'],
+                'attributes' => [TypeScriptConstants::class],
+            ],
+        ]));
+
+        $this->expectExceptionObject(StoliException::invalidConstantsName(BadName::class, 'bad-name'));
+
+        $builder->groups();
     }
 }

@@ -44,15 +44,7 @@ final class RoutesFileExporterTest extends TestCase
 
         parent::setUp();
 
-        // StoliConfig duck-types this object; its output directory is where the single
-        // generated file lands, so a stand-in with the one property is enough.
-        $transformerConfig = new class
-        {
-            public string $outputDirectory;
-        };
-        $transformerConfig->outputDirectory = self::tmp().'/types';
-
-        $this->app->instance('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig', $transformerConfig);
+        self::useTransformerOutputDirectory(self::tmp().'/types');
     }
 
     protected function tearDown(): void

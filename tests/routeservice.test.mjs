@@ -16,6 +16,7 @@ const routes = {
 	'posts.index': { uri: 'posts/{page?}', host: null },
 	'tenant.home': { uri: '{tenant}/home', host: null },
 	search: { uri: 'search', host: null },
+	'tenant.dashboard': { uri: 'dashboard', host: 'https://{account}.example.test' },
 };
 const route = createRoute({ routes });
 
@@ -37,6 +38,14 @@ const consumed = { user: 1, name: 'x' };
 const service = new RouteService({ routes });
 assert.strictEqual(service.createURLWithoutQuery('users.show', consumed), '/users/1');
 assert.deepStrictEqual(consumed, { name: 'x' }, 'path params must leave the body');
+
+// Parameters are optional when the route has no required ones
+assert.strictEqual(service.createURLWithoutQuery('posts.index'), '/posts');
+assert.throws(() => service.createURLWithoutQuery('users.show'), /Missing required parameter "user"/);
+
+// Parameters in the route domain are filled in and consumed like path parameters
+assert.strictEqual(route('tenant.dashboard', { account: 'acme', tab: 'x' }), 'https://acme.example.test/dashboard?tab=x');
+assert.throws(() => route('tenant.dashboard'), /Missing required parameter "account"/);
 
 // rootUrl with or without a trailing slash
 assert.strictEqual(new RouteService({ routes, rootUrl: 'https://api.test/' }).generateFullURL('search'), 'https://api.test/search');

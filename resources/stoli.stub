@@ -11,7 +11,7 @@ export class RouteService {
 		return Object.hasOwn(this.#routes, name);
 	}
 
-	createURLWithoutQuery(name, parameters) {
+	createURLWithoutQuery(name, parameters = {}) {
 		return this.#create(name, parameters, { withQueryString: false });
 	}
 
@@ -22,7 +22,8 @@ export class RouteService {
 
 	#create(name, parameters, options = { withQueryString: true }) {
 		const route = this.#find(name);
-		const hostname = this.#getHostname(route);
+		// A route domain can hold parameters too, e.g. {account}.example.com
+		const hostname = this.#replaceNamedParameters(name, this.#getHostname(route), parameters);
 		const path = this.#replaceNamedParameters(name, route.uri, parameters);
 		const qs = options.withQueryString ? this.#getRouteQueryString(parameters) : null;
 
@@ -46,7 +47,7 @@ export class RouteService {
 		// The leading slash is part of the match so an absent optional parameter
 		// takes its own path segment with it.
 		return uri.replace(/\/?{(\w+)(\??)}/g, (match, key, optional) => {
-			const value = Object.prototype.hasOwnProperty.call(parameters, key) ? parameters[key] : null;
+			const value = Object.hasOwn(parameters, key) ? parameters[key] : null;
 
 			if (value === null || value === undefined) {
 				if (!optional) {

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli\Tests\Integration;
 
 use StubbeDev\LaravelStoli\Compilers\ConstraintTypeMapper;
-use StubbeDev\LaravelStoli\Compilers\JsonFileCompiler;
 use StubbeDev\LaravelStoli\Compilers\TypeScriptFileCompiler;
 use StubbeDev\LaravelStoli\FileRouteBuilder;
 use StubbeDev\LaravelStoli\Items\File;
@@ -27,7 +26,7 @@ final class TypeScriptCompilerIntegrationTest extends TestCase
     private function compile(): string
     {
         $builder = self::create(FileRouteBuilder::class);
-        $compiler = new TypeScriptFileCompiler(new JsonFileCompiler, new ConstraintTypeMapper);
+        $compiler = new TypeScriptFileCompiler(new ConstraintTypeMapper);
 
         /** @var File $file */
         $file = $builder->files()->values()[0];

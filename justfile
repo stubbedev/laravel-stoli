@@ -44,6 +44,10 @@ deps: composer-install
 test: build test-js
     docker run --rm -v {{current_dir}}:/app -w /app {{image}} vendor/bin/phpunit ${FILTER_TEST_OPTIONS:-} --testdox
 
+# Run larastan at max level over config, src and tests inside the built image.
+analyse: build
+    docker run --rm -v {{current_dir}}:/app -w /app {{image}} vendor/bin/phpstan analyse --memory-limit=1G
+
 # The published stub is plain JS, so it is checked with node instead of phpunit.
 test-js:
     node {{current_dir}}/tests/routeservice.test.mjs
@@ -86,6 +90,7 @@ release level:
     esac
     echo "releasing $v -> v$new"
     just test
+    just analyse
     git tag "v$new"
     git push origin HEAD
     git push origin "v$new"

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli;
 
 use Illuminate\Routing\Route as LaravelRoute;
+use Illuminate\Support\Str;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
@@ -13,10 +14,13 @@ use PHPStan\PhpDocParser\Parser\PhpDocParser;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
+use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
-use Spatie\TypeScriptTransformer\Writers\GlobalNamespaceWriter;
+use StubbeDev\LaravelStoli\Items\DataType;
 use Throwable;
+
+use function class_basename;
 
 /**
  * Resolves request and response TypeScript type references for controller actions
@@ -24,23 +28,17 @@ use Throwable;
  *
  * When a controller method accepts a Data subclass as its request parameter, this
  * resolver looks up the corresponding TypeScript type in the typescript-transformer
- * output file and returns its name + source file for use in import statements.
+ * types file. The same lookup is performed on the return type for the response,
+ * including a generic argument from the PHPDoc @return tag.
  *
- * The same lookup is performed on the return type annotation for the response.
+ * Types found inside a `declare namespace` (the GlobalNamespaceWriter output) are
+ * ambient globals, referenced by their dotted path (e.g.
+ * `App.Http.Data.StoreUserRequestData`) with nothing to import. Types exported at
+ * the top level of a module file are referenced by their bare name and imported.
  *
- * If the output file uses `declare namespace` (the default when
- * spatie/typescript-transformer is configured with a namespace map), the types
- * are ambient globals and no import is needed.  In that case `ambient` is true
- * and `type` contains the fully-qualified dotted namespace path (e.g.
- * `App.Http.Data.StoreUserRequestData`).
- *
- * If the output file uses regular `export type` declarations, `ambient` is false
- * and `type` is just the class basename — the compiler will emit an `import type`
- * statement pointing at the output file.
- *
- * Routes that do not use Spatie Data objects return null for both fields.
+ * Routes that do not use Spatie Data objects return null for both.
  */
-final readonly class SpatieDataTypeResolver
+final class SpatieDataTypeResolver
 {
     /**
      * Inner generic arguments that are not classes (e.g. ApiResponseData<null>)
@@ -59,177 +57,148 @@ final readonly class SpatieDataTypeResolver
         'mixed' => 'unknown',
     ];
 
+    private const DATA_CLASSES = [
+        'Spatie\\LaravelData\\Data',
+        'Spatie\\LaravelData\\Resource',
+    ];
+
     /**
-     * @return array{
-     *     request: array{type: string, file: string, ambient: bool}|null,
-     *     response: array{type: string, file: string, ambient: bool}|null,
-     * }
+     * Exported type path => whether it is ambient, read once from the types file.
+     *
+     * @var array<string, bool>|null
+     */
+    private ?array $exports = null;
+
+    public function __construct(private readonly TransformerOutput $output) {}
+
+    /**
+     * @return array{request: ?DataType, response: ?DataType}
      */
     public function resolve(LaravelRoute $route): array
     {
-        $action = $route->getAction('uses');
+        $method = self::actionMethod($route);
 
-        if (!is_string($action)) {
-            return ['request' => null, 'response' => null];
-        }
-
-        if (str_contains($action, '@')) {
-            [$controller, $method] = explode('@', $action, 2);
-        } else {
-            $controller = $action;
-            $method = '__invoke';
-        }
-
-        if (!class_exists($controller)) {
-            return ['request' => null, 'response' => null];
-        }
-
-        try {
-            $reflection = new ReflectionMethod($controller, $method);
-        } catch (Throwable) {
+        if ($method === null) {
             return ['request' => null, 'response' => null];
         }
 
         return [
-            'request' => $this->resolveRequestType($reflection),
-            'response' => $this->resolveResponseType($reflection),
+            'request' => $this->resolveRequestType($method),
+            'response' => $this->resolveResponseType($method),
         ];
     }
 
+    private static function actionMethod(LaravelRoute $route): ?ReflectionMethod
+    {
+        $action = $route->getAction('uses');
+
+        if (! is_string($action)) {
+            return null;
+        }
+
+        $controller = Str::before($action, '@');
+        $method = str_contains($action, '@') ? Str::after($action, '@') : '__invoke';
+
+        if (! class_exists($controller)) {
+            return null;
+        }
+
+        try {
+            return new ReflectionMethod($controller, $method);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     /**
-     * Find a Spatie Data parameter on the method and look it up in the
-     * typescript-transformer output.
-     *
-     * @return array{type: string, file: string, ambient: bool}|null
+     * The first Spatie Data parameter of the method.
      */
-    private function resolveRequestType(ReflectionMethod $method): ?array
+    private function resolveRequestType(ReflectionMethod $method): ?DataType
     {
         foreach ($method->getParameters() as $parameter) {
             $type = $parameter->getType();
 
-            if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
-                continue;
+            if ($type instanceof ReflectionNamedType && ! $type->isBuiltin() && self::isDataClass($type->getName())) {
+                return $this->lookup($type->getName());
             }
-
-            $className = $type->getName();
-
-            if (!$this->isDataClass($className)) {
-                continue;
-            }
-
-            return $this->lookupTransformerType($className);
         }
 
         return null;
     }
 
     /**
-     * Inspect the return type annotation and look up a Data class in the
-     * typescript-transformer output.
+     * The Data class the method returns.
      *
-     * When the reflected return type is a wrapper Data class (e.g. ApiResponseData),
-     * the PHPDoc @return tag is parsed for a generic argument so the inner type
-     * (e.g. StoreUserResponseData in ApiResponseData<StoreUserResponseData>) is
-     * resolved instead, producing a fully-qualified TS type like
+     * When the PHPDoc @return tag gives it a generic argument, the argument is
+     * resolved too: ApiResponseData<StoreUserResponseData> becomes
      * App.Http.Data.ApiResponseData<App.Http.Data.StoreUserResponseData>.
-     *
-     * @return array{type: string, file: string, ambient: bool}|null
      */
-    private function resolveResponseType(ReflectionMethod $method): ?array
+    private function resolveResponseType(ReflectionMethod $method): ?DataType
     {
         $returnType = $method->getReturnType();
 
-        if (!$returnType instanceof ReflectionNamedType) {
+        if (! $returnType instanceof ReflectionNamedType || ! self::isDataClass($returnType->getName())) {
             return null;
         }
 
-        $className = $returnType->getName();
+        $resolved = $this->lookup($returnType->getName());
+        $argument = $resolved === null ? null : self::phpDocGenericArgument($method);
 
-        if (!$this->isDataClass($className)) {
-            return null;
-        }
-
-        $resolved = $this->lookupTransformerType($className);
-
-        if ($resolved === null) {
-            return null;
-        }
-
-        // Attempt to resolve a generic type argument from the PHPDoc @return tag.
-        $inner = $this->resolvePhpDocReturnGeneric($method, $className);
-
-        if ($inner === null) {
+        if ($resolved === null || $argument === null) {
             return $resolved;
         }
 
-        $innerType = self::TS_LITERAL_TYPES[strtolower($inner)]
-            ?? $this->lookupTransformerType($inner)['type']
-            ?? null;
+        $literal = self::TS_LITERAL_TYPES[strtolower($argument)] ?? null;
 
-        if ($innerType === null) {
-            return $resolved;
+        if ($literal !== null) {
+            return $resolved->withArgument($literal);
         }
 
-        return [
-            'type' => "{$resolved['type']}<{$innerType}>",
-            'file' => $resolved['file'],
-            'ambient' => $resolved['ambient'],
-        ];
+        $inner = $this->lookup($argument);
+
+        return $inner === null ? $resolved : $resolved->withArgument($inner->type, $inner->imports);
     }
 
     /**
-     * Parse the PHPDoc @return tag on the method and return the first generic
-     * type argument's fully-qualified class name when the outer type matches
-     * the reflected return class.
-     *
-     * e.g. "@return ApiResponseData<StoreUserResponseData>" → resolves the
-     * short name "StoreUserResponseData" to its FQN using the class's use statements.
-     *
-     * Non-class arguments listed in self::TS_LITERAL_TYPES (e.g. the "null" in
-     * "@return ApiResponseData<null>") are returned verbatim.
+     * The single generic argument of the PHPDoc @return tag, as a fully-qualified
+     * class name, or verbatim when it is one of self::TS_LITERAL_TYPES (e.g. the
+     * "null" in "@return ApiResponseData<null>").
      */
-    private function resolvePhpDocReturnGeneric(ReflectionMethod $method, string $outerClass): ?string
+    private static function phpDocGenericArgument(ReflectionMethod $method): ?string
     {
+        $docComment = $method->getDocComment();
+
+        if ($docComment === false) {
+            return null;
+        }
+
         try {
-            $docComment = $method->getDocComment();
-
-            if ($docComment === false) {
-                return null;
-            }
-
             $config = new ParserConfig([]);
             $constExprParser = new ConstExprParser($config);
-            $typeParser = new TypeParser($config, $constExprParser);
-            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
-            $lexer = new Lexer($config);
-
-            $tokens = new TokenIterator($lexer->tokenize($docComment));
-            $phpDoc = $phpDocParser->parse($tokens);
-
-            foreach ($phpDoc->getReturnTagValues() as $returnTag) {
-                $type = $returnTag->type;
-
-                if (!$type instanceof GenericTypeNode) {
-                    continue;
-                }
-
-                if (count($type->genericTypes) !== 1) {
-                    continue;
-                }
-
-                $innerTypeNode = $type->genericTypes[0];
-
-                if (!$innerTypeNode instanceof IdentifierTypeNode) {
-                    continue;
-                }
-
-                if (isset(self::TS_LITERAL_TYPES[strtolower($innerTypeNode->name)])) {
-                    return $innerTypeNode->name;
-                }
-
-                return $this->resolveClassName($innerTypeNode->name, $method->getDeclaringClass());
-            }
+            $parser = new PhpDocParser($config, new TypeParser($config, $constExprParser), $constExprParser);
+            $phpDoc = $parser->parse(new TokenIterator((new Lexer($config))->tokenize($docComment)));
         } catch (Throwable) {
+            return null;
+        }
+
+        foreach ($phpDoc->getReturnTagValues() as $returnTag) {
+            $type = $returnTag->type;
+
+            if (! $type instanceof GenericTypeNode || count($type->genericTypes) !== 1) {
+                continue;
+            }
+
+            $argument = $type->genericTypes[0];
+
+            if (! $argument instanceof IdentifierTypeNode) {
+                continue;
+            }
+
+            if (isset(self::TS_LITERAL_TYPES[strtolower($argument->name)])) {
+                return $argument->name;
+            }
+
+            return self::resolveClassName($argument->name, $method->getDeclaringClass());
         }
 
         return null;
@@ -238,53 +207,48 @@ final readonly class SpatieDataTypeResolver
     /**
      * Resolve a short class name from a PHPDoc tag to its fully-qualified name
      * by inspecting the declaring class's namespace and use statements.
+     *
+     * @param  ReflectionClass<object>  $declaringClass
      */
-    private function resolveClassName(string $shortName, \ReflectionClass $declaringClass): ?string
+    private static function resolveClassName(string $shortName, ReflectionClass $declaringClass): ?string
     {
-        // Already fully qualified.
         if (str_starts_with($shortName, '\\')) {
             return ltrim($shortName, '\\');
         }
 
-        $source = @file_get_contents($declaringClass->getFileName());
+        $file = $declaringClass->getFileName();
+        $source = $file === false ? false : @file_get_contents($file);
 
         if ($source === false) {
             return null;
         }
 
-        // Extract use statements: "use Foo\Bar\Baz;" or "use Foo\Bar\Baz as Alias;"
+        // "use Foo\Bar\Baz;" or "use Foo\Bar\Baz as Alias;"
         preg_match_all('/^use\s+([\w\\\\]+)(?:\s+as\s+(\w+))?\s*;/m', $source, $matches, PREG_SET_ORDER);
 
         foreach ($matches as $match) {
-            $fqn = $match[1];
-            $alias = $match[2] ?? class_basename($fqn);
-
-            if ($alias === $shortName) {
-                return $fqn;
+            if (($match[2] ?? class_basename($match[1])) === $shortName) {
+                return $match[1];
             }
         }
 
-        // Fall back to same namespace as the declaring class.
         $namespace = $declaringClass->getNamespaceName();
+        $candidate = $namespace === '' ? $shortName : "{$namespace}\\{$shortName}";
 
-        if ($namespace !== '') {
-            $candidate = $namespace . '\\' . $shortName;
-
-            if (class_exists($candidate)) {
-                return $candidate;
-            }
+        if (class_exists($candidate)) {
+            return $candidate;
         }
 
         return class_exists($shortName) ? $shortName : null;
     }
 
-    private function isDataClass(string $className): bool
+    private static function isDataClass(string $className): bool
     {
-        if (!class_exists($className)) {
+        if (! class_exists($className)) {
             return false;
         }
 
-        foreach (['Spatie\\LaravelData\\Data', 'Spatie\\LaravelData\\Resource'] as $base) {
+        foreach (self::DATA_CLASSES as $base) {
             if (is_a($className, $base, true)) {
                 return true;
             }
@@ -294,119 +258,91 @@ final readonly class SpatieDataTypeResolver
     }
 
     /**
-     * Look up the given PHP class in the typescript-transformer output file.
-     *
-     * Handles two output formats produced by spatie/typescript-transformer:
-     *
-     *  1. `declare namespace` format (ambient globals):
-     *     The file opens with `declare namespace …`.  Types are accessed via a
-     *     dotted path derived from the PHP FQN (backslashes → dots).  No import
-     *     is needed; `ambient` is set to true.
-     *
-     *  2. `export type` format (regular ES modules):
-     *     The file uses top-level `export type Foo = …`.  The bare class basename
-     *     is used as the type name and an `import type` statement is emitted.
-     *     `ambient` is set to false.
-     *
-     * The output file path is read from the `TypeScriptTransformerConfig` singleton
-     * bound by spatie/laravel-typescript-transformer v3 via `GlobalNamespaceWriter::$path`.
-     *
-     * @return array{type: string, file: string, ambient: bool}|null
+     * Find the type the transformer generated for a PHP class: at its namespace path
+     * when it is ambient, or by its bare name when it is a module export.
      */
-    private function lookupTransformerType(string $dataClass): ?array
+    private function lookup(string $class): ?DataType
     {
-        try {
-            $outputFile = $this->resolveOutputFileFromContainer();
+        $file = $this->output->typesFile;
+        $exports = $this->exports();
 
-            if (!is_string($outputFile) || !file_exists($outputFile)) {
-                return null;
-            }
-
-            $content = @file_get_contents($outputFile);
-
-            if ($content === false) {
-                return null;
-            }
-
-            $resolvedFile = realpath($outputFile) ?: $outputFile;
-            $baseName = class_basename($dataClass);
-
-            // Detect whether the file uses declare-namespace format.
-            $isDeclareNamespace = (bool) preg_match('/^\s*declare\s+namespace\s+/m', $content);
-
-            if ($isDeclareNamespace) {
-                // Build the dotted namespace path from the PHP FQN.
-                // e.g. App\Http\Data\StoreUserRequestData → App.Http.Data.StoreUserRequestData
-                $dottedPath = str_replace('\\', '.', ltrim($dataClass, '\\'));
-
-                // Verify the type exists in the file by matching the class basename
-                // as an exported type/interface within a namespace block.
-                if (!preg_match('/\bexport\s+(?:type|interface)\s+' . preg_quote($baseName, '/') . '\b/', $content)) {
-                    return null;
-                }
-
-                return ['type' => $dottedPath, 'file' => $resolvedFile, 'ambient' => true];
-            }
-
-            // Regular export format — match by bare class basename.
-            if (preg_match('/\bexport\s+(?:type|interface)\s+' . preg_quote($baseName, '/') . '\b/', $content)) {
-                return ['type' => $baseName, 'file' => $resolvedFile, 'ambient' => false];
-            }
-        } catch (Throwable) {
+        if ($file === null || $exports === []) {
+            return null;
         }
 
-        return null;
+        $file = realpath($file) ?: $file;
+        $dotted = str_replace('\\', '.', ltrim($class, '\\'));
+
+        if ($exports[$dotted] ?? false) {
+            return new DataType($dotted, $file);
+        }
+
+        $baseName = class_basename($class);
+
+        if (! isset($exports[$baseName])) {
+            return null;
+        }
+
+        return $exports[$baseName]
+            ? new DataType($baseName, $file)
+            : new DataType($baseName, $file, [$baseName]);
     }
 
     /**
-     * Attempt to derive the output file path from the TypeScriptTransformerConfig
-     * singleton bound by spatie/laravel-typescript-transformer v3.
-     *
-     * The config exposes `$typesWriter`; if it is a GlobalNamespaceWriter we can
-     * read its protected `$path` property via reflection to get the exact file the
-     * transformer will write to.  For any other Writer implementation we fall back
-     * to `$outputDirectory/index.d.ts`.
-     *
-     * Returns null if the package is not installed or the binding is absent.
+     * @return array<string, bool>
      */
-    private function resolveOutputFileFromContainer(): ?string
+    private function exports(): array
     {
-        try {
-            $config = app('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig');
-        } catch (Throwable) {
-            return null;
+        if ($this->exports !== null) {
+            return $this->exports;
         }
 
-        $outputDirectory = isset($config->outputDirectory) && is_string($config->outputDirectory)
-            ? rtrim($config->outputDirectory, '/\\')
-            : null;
+        $file = $this->output->typesFile;
+        $source = $file !== null && is_file($file) ? @file_get_contents($file) : false;
 
-        // Prefer reading the exact filename off the writer via reflection,
-        // then combine it with the output directory.
-        if (isset($config->typesWriter) && $config->typesWriter instanceof GlobalNamespaceWriter) {
-            try {
-                $prop = new \ReflectionProperty($config->typesWriter, 'path');
-                $prop->setAccessible(true);
-                $writerPath = $prop->getValue($config->typesWriter);
+        return $this->exports = $source === false ? [] : self::parseExports($source);
+    }
 
-                if (is_string($writerPath) && $writerPath !== '') {
-                    // The writer stores only the filename (e.g. "index.d.ts").
-                    // Combine with outputDirectory when the path is not already absolute.
-                    if (!str_starts_with($writerPath, '/') && $outputDirectory !== null) {
-                        return $outputDirectory . DIRECTORY_SEPARATOR . $writerPath;
-                    }
+    /**
+     * Every exported type and interface in a types file, keyed by its dotted path
+     * through the enclosing namespaces. Braces are tracked to know which namespace
+     * a declaration sits in; a type inside `declare namespace` or `declare global`
+     * is ambient.
+     *
+     * @return array<string, bool>
+     */
+    private static function parseExports(string $source): array
+    {
+        preg_match_all(
+            '/(?<declare>\bdeclare\s+)?(?:\bnamespace\s+(?<namespace>[\w$.]+)\s*\{|\bglobal\s*\{)'
+            .'|\bexport\s+(?:declare\s+)?(?:type|interface)\s+(?<type>[A-Za-z_$][\w$]*)'
+            .'|(?<brace>[{}])/',
+            $source,
+            $tokens,
+            PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL,
+        );
 
-                    return $writerPath;
-                }
-            } catch (Throwable) {
+        $stack = [];
+        $exports = [];
+
+        foreach ($tokens as $token) {
+            $ambient = $stack !== [] && $stack[array_key_last($stack)]['ambient'];
+
+            if ($token['type'] !== null) {
+                $path = [...array_merge(...array_column($stack, 'names')), $token['type']];
+                $exports[implode('.', $path)] ??= $ambient;
+            } elseif ($token['brace'] === '}') {
+                array_pop($stack);
+            } elseif ($token['brace'] === '{') {
+                $stack[] = ['names' => [], 'ambient' => $ambient];
+            } else {
+                $stack[] = [
+                    'names' => $token['namespace'] === null ? [] : explode('.', $token['namespace']),
+                    'ambient' => $ambient || $token['declare'] !== null || $token['namespace'] === null,
+                ];
             }
         }
 
-        // Fall back to the output directory + conventional filename.
-        if ($outputDirectory === null) {
-            return null;
-        }
-
-        return $outputDirectory . DIRECTORY_SEPARATOR . 'index.d.ts';
+        return $exports;
     }
 }

@@ -6,9 +6,10 @@ namespace StubbeDev\LaravelStoli\Tests\Integration;
 
 use Illuminate\Filesystem\Filesystem;
 use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
+use StubbeDev\LaravelStoli\Compilers\ConstantsFileCompiler;
 use StubbeDev\LaravelStoli\ConstantGroupBuilder;
 use StubbeDev\LaravelStoli\Exporters\ConstantsExporter;
-use StubbeDev\LaravelStoli\RouteHashCache;
+use StubbeDev\LaravelStoli\GeneratedFileWriter;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\Tests\TestCase;
 
@@ -49,11 +50,17 @@ final class ConstantsExporterTest extends TestCase
 
     protected static function config(): array
     {
+        return ['constants' => self::constantsConfig()];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function constantsConfig(): array
+    {
         return [
-            'constants' => [
-                'paths' => [dirname(__DIR__).'/Fixtures/Constants'],
-                'attributes' => [TypeScriptConstants::class],
-            ],
+            'paths' => [dirname(__DIR__).'/Fixtures/Constants'],
+            'attributes' => [TypeScriptConstants::class],
         ];
     }
 
@@ -64,15 +71,7 @@ final class ConstantsExporterTest extends TestCase
 
         parent::setUp();
 
-        // StoliConfig duck-types this object; the output directory is where the
-        // constants file lands when the config does not override the path.
-        $transformerConfig = new class
-        {
-            public string $outputDirectory;
-        };
-        $transformerConfig->outputDirectory = self::tmp().'/types';
-
-        $this->app->instance('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig', $transformerConfig);
+        self::useTransformerOutputDirectory(self::tmp().'/types');
     }
 
     protected function tearDown(): void
@@ -89,7 +88,7 @@ final class ConstantsExporterTest extends TestCase
 
         $this->assertFileExists(self::generatedFile());
 
-        $content = file_get_contents(self::generatedFile());
+        $content = (new Filesystem)->get(self::generatedFile());
 
         $this->assertStringContainsString('export const StubbeDev = {', $content);
         $this->assertStringContainsString("VIEW: 'view',", $content);
@@ -127,7 +126,7 @@ final class ConstantsExporterTest extends TestCase
 
         $exporter->publish();
 
-        $this->assertStringContainsString('export const StubbeDev = {', file_get_contents(self::generatedFile()));
+        $this->assertStringContainsString('export const StubbeDev = {', (new Filesystem)->get(self::generatedFile()));
     }
 
     public function test_the_generate_command_pipeline_writes_the_constants_too(): void
@@ -144,15 +143,15 @@ final class ConstantsExporterTest extends TestCase
             'constants' => [
                 'enabled' => false,
                 'path' => self::tmp().'/types',
-                ...static::config()['constants'],
+                ...self::constantsConfig(),
             ],
         ]);
 
         $exporter = new ConstantsExporter(
-            new Filesystem,
             $config,
             new ConstantGroupBuilder($config),
-            new RouteHashCache(new Filesystem),
+            new ConstantsFileCompiler,
+            self::create(GeneratedFileWriter::class),
         );
 
         $exporter->publish();

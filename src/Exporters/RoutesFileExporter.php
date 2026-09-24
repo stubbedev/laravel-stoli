@@ -4,14 +4,11 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli\Exporters;
 
-use Illuminate\Filesystem\Filesystem;
-use Spatie\TypeScriptTransformer\Formatters\Formatter;
-use StubbeDev\LaravelStoli\Compilers\JsonFileCompiler;
 use StubbeDev\LaravelStoli\Compilers\TypeScriptFileCompiler;
 use StubbeDev\LaravelStoli\FileRouteBuilder;
+use StubbeDev\LaravelStoli\GeneratedFileWriter;
 use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\Normalizers\Normalizer;
-use StubbeDev\LaravelStoli\RouteHashCache;
 use StubbeDev\LaravelStoli\StoliException;
 use Throwable;
 
@@ -19,48 +16,30 @@ use function Illuminate\Filesystem\join_paths;
 
 final readonly class RoutesFileExporter
 {
-    private TypeScriptFileCompiler $compiler;
-
     public function __construct(
         private Normalizer $filesNormalizer,
-        private Filesystem $filesystem,
         private FileRouteBuilder $fileRouteBuilder,
-        private RouteHashCache $hashCache,
-        private ?Formatter $formatter = null,
-    ) {
-        $this->compiler = new TypeScriptFileCompiler(new JsonFileCompiler());
-    }
+        private TypeScriptFileCompiler $compiler,
+        private GeneratedFileWriter $writer,
+    ) {}
 
     public function publish(): void
     {
-        $this->filesNormalizer
-            ->normalize($this->fileRouteBuilder->files())
-            ->each($this->export(...));
+        foreach ($this->filesNormalizer->normalize($this->fileRouteBuilder->files()) as $file) {
+            $this->export($file);
+        }
     }
 
     private function export(File $file): void
     {
-        if ($file->path() === null) {
+        $path = $file->path();
+
+        if ($path === null) {
             return;
         }
 
         try {
-            $content = $this->compiler->compile($file);
-            $filePath = join_paths($file->path(), "{$file->name()}.{$this->compiler->extension()}");
-
-            // Skip writing when the compiled content has not changed since the last run.
-            if ($this->hashCache->isUnchanged($file, $content, $filePath)) {
-                return;
-            }
-
-            $this->filesystem->makeDirectory($file->path(), 0755, true, true);
-
-            $this->filesystem->put($filePath, $content);
-
-            $absolutePath = str_starts_with($filePath, '/') ? $filePath : base_path($filePath);
-            $this->formatter?->format([$absolutePath]);
-
-            $this->hashCache->record($file, $content, $filePath);
+            $this->writer->write(join_paths($path, "{$file->name()}.ts"), $this->compiler->compile($file));
         } catch (Throwable $error) {
             throw StoliException::cantExportModule($file->name(), $error);
         }

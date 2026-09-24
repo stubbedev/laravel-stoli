@@ -27,7 +27,7 @@ function buildUrl<N extends keyof {{STUDLY}}RouteParams>(
 		// createURLWithoutQuery drops the keys it put in the path; the rest is the body
 		const body = new FormData();
 		params.forEach((value, key) => {
-			if (key in remaining) {
+			if (Object.prototype.hasOwnProperty.call(remaining, key)) {
 				body.append(key, value);
 			}
 		});

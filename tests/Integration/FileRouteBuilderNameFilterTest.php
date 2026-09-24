@@ -6,6 +6,7 @@ namespace StubbeDev\LaravelStoli\Tests\Integration;
 
 use StubbeDev\LaravelStoli\FileRouteBuilder;
 use StubbeDev\LaravelStoli\Items\File;
+use StubbeDev\LaravelStoli\Items\Route;
 use StubbeDev\LaravelStoli\Tests\TestCase;
 
 final class FileRouteBuilderNameFilterTest extends TestCase
@@ -25,10 +26,9 @@ final class FileRouteBuilderNameFilterTest extends TestCase
     private function routeNames(string $module): array
     {
         $file = self::create(FileRouteBuilder::class)->files()
-            ->filter(fn (File $f) => $f->name() === $module)
-            ->values()[0];
+            ->firstOrFail(static fn (File $file): bool => $file->name() === $module);
 
-        return $file->routes()->map(fn ($r) => $r->name())->values();
+        return array_values($file->routes()->map(static fn (Route $route): string => $route->name())->all());
     }
 
     public function test_a_wildcard_pattern_selects_routes_by_name_across_uri_prefixes(): void

@@ -9,223 +9,204 @@ use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\Items\Route;
 use StubbeDev\LaravelStoli\Utils;
 
-final readonly class TypeScriptFileCompiler implements Compiler
+final readonly class TypeScriptFileCompiler
 {
+    /**
+     * The HTTP methods the Stoli axios wrapper exposes. Laravel pairs every GET
+     * route with HEAD, so HEAD needs no type of its own.
+     */
+    private const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
     public function __construct(
-        private JsonFileCompiler $jsonFileGenerator,
-        private ConstraintTypeMapper $constraintTypeMapper = new ConstraintTypeMapper(),
+        private ConstraintTypeMapper $constraintTypeMapper = new ConstraintTypeMapper,
     ) {}
 
     public function compile(File $file): string
     {
         $module = Str::studly($file->name());
-
-        return self::template(
-            $module,
-            self::jsonToTsFormat($this->jsonFileGenerator->compile($file)),
-            $this->generateParamsInterface($module, $file),
-            self::generateResponseInterface($module, $file),
-            self::generateMethodNameTypes($module, $file),
-            self::collectTypeScriptImports($file),
-        );
-    }
-
-    private static function jsonToTsFormat(string $string): string
-    {
-        return preg_replace("/'([a-zA-Z_][a-zA-Z0-9_]*)'\s*:/", '$1:', preg_replace("/(')\s*$/m", "',", str_replace('"', "'", $string)));
-    }
-
-    public function extension(): string
-    {
-        return 'ts';
-    }
-
-    private static function template(string $module, string $routes, string $paramsInterface, string $responseInterface, string $methodNameTypes, string $imports = ''): string
-    {
-        $middle = "$paramsInterface\n\n$responseInterface";
-
-        $importBlock = $imports !== '' ? "$imports\n\n" : '';
+        $imports = self::imports($file);
+        $importBlock = $imports !== '' ? "{$imports}\n\n" : '';
+        $routes = $this->routes($file);
+        $params = $this->paramsInterface($module, $file);
+        $responses = self::responseInterface($module, $file);
+        $methodNames = self::methodNameTypes($module, $file);
 
         return <<<TS
-        {$importBlock}const routes = $routes as const;
+        {$importBlock}const routes = {$routes} as const;
 
-        $middle
+        {$params}
+
+        {$responses}
 
         export type {$module}RouteName = keyof {$module}RouteParams;
 
-        $methodNameTypes
+        {$methodNames}
         export default routes;
 
         TS;
     }
 
-    private function generateParamsInterface(string $module, File $file): string
+    private function routes(File $file): string
     {
-        $entries = $file->routes()->reduce(function (array $acc, Route $route): array {
-            $acc[$route->name()] = "\t'{$route->name()}': " . $this->buildParamTypeForRoute($route) . ';';
+        $entries = [];
 
-            return $acc;
-        }, []);
+        foreach ($file->routes() as $route) {
+            $host = $route->host();
 
-        $body = implode("\n", $entries);
-
-        return "export interface {$module}RouteParams {\n$body\n}";
-    }
-
-    private function buildParamTypeForRoute(Route $route): string
-    {
-        $uriParams = $this->extractUriParams($route->uri(), $route->wheres());
-        $dataRequest = $route->dataRequestType();
-
-        // When there is a Data request type, URI params that match a field in the
-        // Data class are dropped — the Data type takes precedence.  Remaining URI
-        // params (e.g. path-only identifiers not present in the body) are expressed
-        // as an inline object intersected with the Data type.
-        if ($dataRequest !== null) {
-            if (empty($uriParams)) {
-                return $dataRequest['type'];
-            }
-
-            $uriBlock = self::buildUriParamType($uriParams);
-
-            return "{$uriBlock} & {$dataRequest['type']}";
+            $entries[$route->name()] = TypeScript::object([
+                'host' => $host === null ? 'null' : TypeScript::string($host),
+                'uri' => TypeScript::string($route->uri()),
+            ], 1);
         }
 
-        // No Data type — fall back to URI params only.
-        return self::buildUriParamType($uriParams);
+        return TypeScript::object($entries);
     }
 
-    private function extractUriParams(string $uri, array $wheres = []): array
+    private function paramsInterface(string $module, File $file): string
     {
-        preg_match_all('/\{(\w+)(\?)?\}/', $uri, $matches, PREG_SET_ORDER);
+        $types = [];
 
-        $params = [];
+        foreach ($file->routes() as $route) {
+            $types[] = [$route->name(), $this->paramType($route)];
+        }
+
+        return self::interface("{$module}RouteParams", $types);
+    }
+
+    private static function responseInterface(string $module, File $file): string
+    {
+        $types = [];
+
+        foreach ($file->routes() as $route) {
+            $response = $route->dataResponseType();
+
+            if ($response !== null) {
+                $types[] = [$route->name(), $response->type];
+            }
+        }
+
+        return self::interface("{$module}RouteResponse", $types);
+    }
+
+    /**
+     * @param  list<array{string, string}>  $types  route name and type pairs
+     */
+    private static function interface(string $name, array $types): string
+    {
+        $lines = array_map(
+            static fn (array $type): string => "\t".TypeScript::string($type[0]).": {$type[1]};",
+            $types
+        );
+
+        return "export interface {$name} {\n".implode("\n", $lines)."\n}";
+    }
+
+    /**
+     * The URI parameters, intersected with the Data request type when there is one.
+     */
+    private function paramType(Route $route): string
+    {
+        $parameters = $this->uriParameters($route);
+        $data = $route->dataRequestType()?->type;
+
+        if ($data === null) {
+            return self::parametersType($parameters);
+        }
+
+        return $parameters === [] ? $data : self::parametersType($parameters)." & {$data}";
+    }
+
+    /**
+     * The parameters in the route's host and path, with the TypeScript type their
+     * constraint maps to.
+     *
+     * @return array<string, array{type: string, required: bool}>
+     */
+    private function uriParameters(Route $route): array
+    {
+        preg_match_all('/\{(\w+)(\?)?\}/', ($route->host() ?? '').'/'.$route->uri(), $matches, PREG_SET_ORDER);
+
+        $parameters = [];
+
         foreach ($matches as $match) {
-            $name = $match[1];
-            $constraint = $wheres[$name] ?? null;
-            $params[$name] = [
-                'type' => $constraint !== null
-                    ? $this->constraintTypeMapper->map($constraint)
-                    : 'string | number',
-                'required' => empty($match[2]),
+            $constraint = $route->wheres()[$match[1]] ?? null;
+
+            $parameters[$match[1]] = [
+                'type' => $constraint !== null ? $this->constraintTypeMapper->map($constraint) : 'string | number',
+                'required' => ($match[2] ?? '') === '',
             ];
         }
 
-        return $params;
+        return $parameters;
     }
 
-    private static function buildUriParamType(array $params): string
+    /**
+     * @param  array<string, array{type: string, required: bool}>  $parameters
+     */
+    private static function parametersType(array $parameters): string
     {
-        if (empty($params)) {
+        if ($parameters === []) {
             return 'Record<string, unknown>';
         }
 
         $properties = [];
 
-        foreach ($params as $name => $info) {
-            $optional = $info['required'] ? '' : '?';
-            $properties[] = "$name$optional: {$info['type']}";
+        foreach ($parameters as $name => $parameter) {
+            $optional = $parameter['required'] ? '' : '?';
+            $properties[] = "{$name}{$optional}: {$parameter['type']}";
         }
 
         $properties[] = '[key: string]: unknown';
 
-        return '{ ' . implode('; ', $properties) . ' }';
+        return '{ '.implode('; ', $properties).' }';
     }
 
-    private static function generateResponseInterface(string $module, File $file): string
+    private static function methodNameTypes(string $module, File $file): string
     {
-        $entries = $file->routes()->reduce(function (array $acc, Route $route): array {
-            $dataResponse = $route->dataResponseType();
-
-            if ($dataResponse === null) {
-                return $acc;
-            }
-
-            $acc[] = "\t'{$route->name()}': {$dataResponse['type']};";
-
-            return $acc;
-        }, []);
-
-        $body = implode("\n", $entries);
-
-        return "export interface {$module}RouteResponse {\n$body\n}";
-    }
-
-    private static function generateMethodNameTypes(string $module, File $file): string
-    {
-        // The HTTP methods we expose on the Stoli axios wrapper.
-        // Laravel always includes HEAD alongside GET; we treat HEAD as GET for routing purposes.
-        $supported = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-
-        // Collect the set of route names that respond to each HTTP method.
-        $byMethod = array_fill_keys($supported, []);
-
-        $file->routes()->each(function (Route $route) use (&$byMethod, $supported): void {
-            // Normalise: HEAD is covered by GET in the wrapper.
-            $methods = array_map('strtoupper', $route->methods());
-            if (in_array('HEAD', $methods, true) && !in_array('GET', $methods, true)) {
-                $methods[] = 'GET';
-            }
-
-            foreach ($supported as $method) {
-                if (in_array($method, $methods, true)) {
-                    $byMethod[$method][] = "'{$route->name()}'";
-                }
-            }
-        });
-
         $lines = [];
-        foreach ($supported as $method) {
-            $names = $byMethod[$method];
-            $studlyMethod = ucfirst(strtolower($method));
 
-            if (empty($names)) {
-                $union = 'never';
-            } else {
-                $union = implode(' | ', $names);
-            }
+        foreach (self::METHODS as $method) {
+            $names = $file->routes()
+                ->filter(static fn (Route $route): bool => in_array($method, array_map(strtoupper(...), $route->methods()), true))
+                ->map(static fn (Route $route): string => TypeScript::string($route->name()))
+                ->all();
 
-            $lines[] = "export type {$module}{$studlyMethod}RouteName = $union;";
+            $lines[] = "export type {$module}".ucfirst(strtolower($method)).'RouteName = '.TypeScript::union(array_values($names)).';';
         }
 
-        return implode("\n", $lines) . "\n";
+        return implode("\n", $lines)."\n";
     }
 
     /**
-     * Build an import block for any TypeScript type references collected from routes.
+     * Build an import block for the Data types the routes reference.
      *
-     * Only emits `import type` statements for non-ambient types (i.e. types that live
-     * in regular ES module files with top-level `export type` declarations).
-     *
-     * Types that come from `declare namespace` output files are ambient globals and
-     * must not be imported — they are referenced directly by their dotted namespace
-     * path (e.g. `App.Http.Data.StoreUserRequestData`).
+     * Types from a `declare namespace` output file are ambient globals referenced by
+     * their dotted namespace path (e.g. `App.Http.Data.StoreUserRequestData`) and
+     * carry nothing to import.
      */
-    private static function collectTypeScriptImports(File $file): string
+    private static function imports(File $file): string
     {
-        $byFile = $file->routes()->reduce(function (array $acc, Route $route): array {
-            foreach (['dataRequestType', 'dataResponseType'] as $getter) {
-                $typeInfo = $route->$getter();
-                // Skip ambient types — they are declare namespace globals, no import needed.
-                if ($typeInfo !== null && !$typeInfo['ambient']) {
-                    $acc[$typeInfo['file']][] = $typeInfo['type'];
-                }
-            }
+        $path = $file->path();
 
-            return $acc;
-        }, []);
-
-        if (empty($byFile)) {
+        if ($path === null) {
             return '';
         }
 
-        $fromDir = base_path(rtrim($file->path(), '/'));
+        $byFile = [];
+
+        foreach ($file->routes() as $route) {
+            foreach (array_filter([$route->dataRequestType(), $route->dataResponseType()]) as $dataType) {
+                foreach ($dataType->imports as $name) {
+                    $byFile[$dataType->file][$name] = $name;
+                }
+            }
+        }
+
+        $fromDir = Utils::absolutePath(rtrim($path, '/'));
         $lines = [];
 
-        foreach ($byFile as $absFile => $types) {
-            $rel = Utils::relativeImportPath($fromDir, $absFile);
-            $names = implode(', ', array_unique($types));
-            $lines[] = "import type { $names } from '$rel';";
+        foreach ($byFile as $typesFile => $names) {
+            $lines[] = 'import type { '.implode(', ', $names)." } from '".Utils::relativeImportPath($fromDir, $typesFile)."';";
         }
 
         return implode("\n", $lines);

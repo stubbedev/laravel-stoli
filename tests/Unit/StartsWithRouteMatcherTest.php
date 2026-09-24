@@ -42,4 +42,18 @@ final class StartsWithRouteMatcherTest extends TestCase
         self::assertTrue($this->matcher->matches('api/users', 'api'));
         self::assertFalse($this->matcher->matches('other/path', 'api'));
     }
+
+    public function test_a_prefix_only_matches_whole_path_segments(): void
+    {
+        self::assertTrue($this->matcher->matches('api', '/api'));
+        self::assertTrue($this->matcher->matches('api/users', 'api/'));
+        self::assertFalse($this->matcher->matches('apidocs', '/api'));
+        self::assertFalse($this->matcher->matches('api/users-archive', 'api/users'));
+    }
+
+    public function test_the_root_path_matches_every_uri(): void
+    {
+        self::assertTrue($this->matcher->matches('api/users', '/'));
+        self::assertTrue($this->matcher->matches('', '/'));
+    }
 }

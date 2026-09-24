@@ -4,63 +4,71 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli;
 
+use Illuminate\Support\Arr;
 use Spatie\TypeScriptTransformer\Attributes\TypeScript;
-use Spatie\TypeScriptTransformer\Writers\GlobalNamespaceWriter;
 use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
-use Throwable;
 
 use function app_path;
 
-final class StoliConfig
+final readonly class StoliConfig
 {
-    public function __construct(private readonly array $config) {}
+    /**
+     * @param  array<mixed>  $config  the `stoli` config array
+     */
+    public function __construct(
+        private array $config,
+        private TransformerOutput $output = new TransformerOutput,
+    ) {}
 
     public function splitModulesInFiles(): bool
     {
-        return $this->config['split'] ?? true;
+        return (bool) ($this->config['split'] ?? true);
     }
 
     public function resourcesPath(): string
     {
-        return $this->config['resources'];
+        return dirname(__DIR__).'/resources';
     }
 
+    /**
+     * The raw module definitions; ModulesProvider validates them.
+     *
+     * @return array<mixed>
+     */
     public function modules(): array
     {
-        return $this->config['modules'] ?? [];
+        $modules = $this->config['modules'] ?? [];
+
+        return is_array($modules) ? $modules : [];
     }
 
     public function defaultSingleFileModuleName(): string
     {
-        return $this->config['single']['name'] ?? 'api';
+        return $this->string('single.name') ?? 'api';
     }
 
     public function axiosRouter(): bool
     {
-        return $this->config['axios'] ?? false;
+        return (bool) ($this->config['axios'] ?? false);
     }
 
     public function constants(): bool
     {
-        return $this->config['constants']['enabled'] ?? true;
+        return (bool) Arr::get($this->config, 'constants.enabled', true);
     }
 
     public function constantsFileName(): string
     {
-        $name = $this->config['constants']['name'] ?? null;
-
-        return is_string($name) && $name !== '' ? $name : 'constants';
+        return $this->string('constants.name') ?? 'constants';
     }
 
     /**
      * Where the constants file is written; the typescript-transformer output
-     * directory unless the module config overrides it.
+     * directory unless the config overrides it.
      */
     public function constantsPath(): ?string
     {
-        $path = $this->config['constants']['path'] ?? null;
-
-        return is_string($path) && $path !== '' ? $path : $this->defaultOutputPath();
+        return $this->string('constants.path') ?? $this->defaultOutputPath();
     }
 
     /**
@@ -70,7 +78,7 @@ final class StoliConfig
      */
     public function constantsAttributes(): array
     {
-        $attributes = $this->config['constants']['attributes'] ?? null;
+        $attributes = Arr::get($this->config, 'constants.attributes');
 
         if (! is_array($attributes)) {
             return [TypeScriptConstants::class, TypeScript::class];
@@ -88,7 +96,7 @@ final class StoliConfig
      */
     public function constantsPaths(): array
     {
-        $configured = $this->config['constants']['paths'] ?? null;
+        $configured = Arr::get($this->config, 'constants.paths');
 
         if (is_array($configured) && $configured !== []) {
             return array_values(array_map(
@@ -97,71 +105,27 @@ final class StoliConfig
             ));
         }
 
-        $discovered = $this->transformerDirectories();
-
-        if ($discovered !== []) {
-            return $discovered;
-        }
-
-        return function_exists('app_path') ? [app_path()] : [];
+        return $this->output->directoriesToWatch !== []
+            ? $this->output->directoriesToWatch
+            : [app_path()];
     }
 
     /**
-     * @return list<string>
-     */
-    private function transformerDirectories(): array
-    {
-        try {
-            $spatieConfig = app('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig');
-        } catch (Throwable) {
-            return [];
-        }
-
-        $directories = $spatieConfig->directoriesToWatch ?? null;
-
-        if (! is_array($directories)) {
-            return [];
-        }
-
-        return array_values(array_unique(array_filter($directories, is_string(...))));
-    }
-
-    /**
-     * Resolve the output directory from the spatie/typescript-transformer config.
-     * Returns null when the transformer has not been registered in the container.
+     * The typescript-transformer output directory, or null when the transformer
+     * has not been registered in the container.
      */
     public function defaultOutputPath(): ?string
     {
-        try {
-            $spatieConfig = app('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig');
-        } catch (Throwable) {
-            return null;
-        }
+        return $this->output->directory;
+    }
 
-        $outputDirectory = isset($spatieConfig->outputDirectory) && is_string($spatieConfig->outputDirectory)
-            ? rtrim($spatieConfig->outputDirectory, '/\\')
-            : null;
+    /**
+     * A non-empty string at the dotted $key, or null when it is missing or not one.
+     */
+    private function string(string $key): ?string
+    {
+        $value = Arr::get($this->config, $key);
 
-        if (isset($spatieConfig->typesWriter) && $spatieConfig->typesWriter instanceof GlobalNamespaceWriter) {
-            try {
-                $prop = new \ReflectionProperty($spatieConfig->typesWriter, 'path');
-                $prop->setAccessible(true);
-                $writerPath = $prop->getValue($spatieConfig->typesWriter);
-
-                if (is_string($writerPath) && $writerPath !== '') {
-                    // The writer stores only the filename; strip it to get the directory.
-                    $dir = dirname($writerPath);
-
-                    if (! str_starts_with($writerPath, '/') && $outputDirectory !== null) {
-                        return $outputDirectory . ($dir !== '.' ? DIRECTORY_SEPARATOR . $dir : '');
-                    }
-
-                    return $dir !== '.' ? $dir : $outputDirectory;
-                }
-            } catch (Throwable) {
-            }
-        }
-
-        return $outputDirectory;
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

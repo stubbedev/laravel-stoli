@@ -79,6 +79,10 @@ jobs:
         if: steps.resolve.outputs.ok == 'true'
         run: vendor/bin/phpunit
 
+      - name: Run larastan for Laravel ${{ matrix.laravel }}
+        if: steps.resolve.outputs.ok == 'true'
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
       # The published stub is plain JS; node is preinstalled on the runner.
       - name: Check the route service stub
         if: steps.resolve.outputs.ok == 'true'

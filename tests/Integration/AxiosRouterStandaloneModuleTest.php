@@ -32,13 +32,7 @@ final class AxiosRouterStandaloneModuleTest extends TestCase
     {
         parent::setUp();
 
-        $this->app->instance('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig', new class
-        {
-            public string $outputDirectory;
-        });
-
-        $this->app->make('Spatie\\TypeScriptTransformer\\TypeScriptTransformerConfig')
-            ->outputDirectory = self::tmp();
+        self::useTransformerOutputDirectory(self::tmp());
     }
 
     protected function tearDown(): void

@@ -10,7 +10,7 @@ use StubbeDev\LaravelStoli\Items\Route;
 use StubbeDev\LaravelStoli\Normalizers\MultipleFilesNormalizer;
 use StubbeDev\LaravelStoli\Normalizers\SingleFileNormalizer;
 use StubbeDev\LaravelStoli\StoliConfig;
-use StubbeDev\LaravelStoli\Support\ArrayList;
+use Illuminate\Support\Collection;
 
 final class SingleFileNormalizerTest extends TestCase
 {
@@ -30,11 +30,17 @@ final class SingleFileNormalizerTest extends TestCase
         );
     }
 
+    /**
+     * @param  list<Route>  $routes
+     */
     private static function makeFile(string $name, array $routes, bool $standalone = false): File
     {
-        return new File($name, 'resources/routes', new ArrayList($routes), $standalone);
+        return new File($name, 'resources/routes', new Collection($routes), $standalone);
     }
 
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
     private static function makeStoliConfig(array $overrides = []): StoliConfig
     {
         return new StoliConfig(array_merge([
@@ -42,7 +48,6 @@ final class SingleFileNormalizerTest extends TestCase
             'single' => ['name' => 'api'],
             'modules' => [],
             'axios' => false,
-            'resources' => __DIR__.'/../../resources',
         ], $overrides));
     }
 
@@ -55,7 +60,7 @@ final class SingleFileNormalizerTest extends TestCase
         $config = self::makeStoliConfig();
         $normalizer = new SingleFileNormalizer($config);
 
-        $files = new ArrayList([
+        $files = new Collection([
             self::makeFile('store', [
                 self::makeRoute('store.products.list', 'api/store/products'),
                 self::makeRoute('store.cart.show', 'api/store/cart'),
@@ -83,7 +88,7 @@ final class SingleFileNormalizerTest extends TestCase
         ]);
         $normalizer = new SingleFileNormalizer($config);
 
-        $files = new ArrayList([self::makeFile('api', [])]);
+        $files = new Collection([self::makeFile('api', [])]);
         $result = $normalizer->normalize($files);
 
         /** @var File $merged */
@@ -100,7 +105,7 @@ final class SingleFileNormalizerTest extends TestCase
         $normalizer = new SingleFileNormalizer(self::makeStoliConfig());
 
         $pages = self::makeFile('pages', [self::makeRoute('app.settings', 'settings')], standalone: true);
-        $result = $normalizer->normalize(new ArrayList([
+        $result = $normalizer->normalize(new Collection([
             self::makeFile('store', [self::makeRoute('store.cart.show', 'api/store/cart')]),
             $pages,
             self::makeFile('admin', [self::makeRoute('admin.users.list', 'api/admin/users')]),
@@ -109,12 +114,12 @@ final class SingleFileNormalizerTest extends TestCase
         self::assertSame(2, $result->count());
 
         /** @var File $merged */
-        [$merged, $standalone] = $result->values();
+        [$merged, $standalone] = $result->all();
 
         self::assertSame('api', $merged->name());
         self::assertSame(
             ['store.cart.show', 'admin.users.list'],
-            $merged->routes()->map(static fn (Route $route) => $route->name())->values(),
+            $merged->routes()->map(static fn (Route $route) => $route->name())->all(),
         );
         self::assertSame($pages, $standalone);
     }
@@ -127,7 +132,7 @@ final class SingleFileNormalizerTest extends TestCase
     {
         $normalizer = new MultipleFilesNormalizer;
 
-        $files = new ArrayList([
+        $files = new Collection([
             self::makeFile('store', []),
             self::makeFile('admin', []),
         ]);
@@ -135,5 +140,14 @@ final class SingleFileNormalizerTest extends TestCase
         $result = $normalizer->normalize($files);
 
         self::assertSame(2, $result->count());
+    }
+
+    public function test_single_normalizer_writes_no_combined_file_when_every_module_is_standalone(): void
+    {
+        $normalizer = new SingleFileNormalizer(self::makeStoliConfig());
+
+        $pages = self::makeFile('pages', [self::makeRoute('app.settings', 'settings')], standalone: true);
+
+        self::assertSame([$pages], $normalizer->normalize(new Collection([$pages]))->all());
     }
 }

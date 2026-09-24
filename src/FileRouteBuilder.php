@@ -10,7 +10,6 @@ use Illuminate\Routing\Router as LaravelRouter;
 use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\Items\Module;
 use StubbeDev\LaravelStoli\Items\Route;
-use StubbeDev\LaravelStoli\Support\AbstractList;
 use StubbeDev\LaravelStoli\Support\ArrayList;
 
 final readonly class FileRouteBuilder
@@ -31,13 +30,21 @@ final readonly class FileRouteBuilder
         $routes = $this->laravelRoutes
             ->filter($this->onlyNamed())
             ->unique(fn (LaravelRoute $route) => $route->getName());
-        $modules = $this->provider->modules();
-        $matches = $modules->matches();
-        $routeCollection = $matches->reduce($this->pair($routes), new ArrayList(AbstractList::Empty));
 
         return $this->provider
             ->modules()
-            ->map($this->toRoutesFile($routeCollection));
+            ->map(fn (Module $module): File => File::from(
+                $module,
+                $routes
+                    ->filter($this->belongsTo($module))
+                    ->map($this->createRouteFor($module))
+            ));
+    }
+
+    private function belongsTo(Module $module): Closure
+    {
+        return fn (LaravelRoute $route): bool => $this->matcher->matches($route->uri(), $module->match())
+            && $module->matchesName((string) $route->getName());
     }
 
     private function onlyNamed(): Closure
@@ -46,31 +53,6 @@ final readonly class FileRouteBuilder
             $name = $route->getName();
 
             return $name !== null && !str_ends_with($name, '.');
-        };
-    }
-
-    private function pair(ArrayList $routes): callable
-    {
-        return function (ArrayList $acc, string $match) use ($routes) {
-            $filtered = $routes->filter(
-                fn (LaravelRoute $route) => $this->matcher->matches($route->uri(), $match)
-            );
-
-            $acc->push($filtered, $match);
-
-            return $acc;
-        };
-    }
-
-    private function toRoutesFile(ArrayList $routeCollection): callable
-    {
-        return function (Module $module) use ($routeCollection): File {
-            $routes = $routeCollection->pick(self::matchedWith($module));
-
-            return File::from(
-                $module,
-                $routes->map($this->createRouteFor($module))
-            );
         };
     }
 
@@ -93,10 +75,5 @@ final readonly class FileRouteBuilder
                 dataResponseType: $resolved['response'],
             );
         };
-    }
-
-    private static function matchedWith(Module $module): callable
-    {
-        return static fn (ArrayList $routes, string $prefix) => $prefix === $module->match();
     }
 }

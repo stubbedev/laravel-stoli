@@ -39,6 +39,7 @@ final readonly class ModulesProvider
             $config['path'] ?? $this->config->defaultOutputPath(),
             $config['absolute'] ?? true,
             $config['stripPrefix'] ?? null,
+            isset($config['names']) ? array_values((array) $config['names']) : null,
         );
     }
 

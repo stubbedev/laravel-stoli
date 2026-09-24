@@ -344,6 +344,7 @@ return [
             'prefix'      => null,
             'path'        => null,                        // defaults to typescript-transformer output dir
             'stripPrefix' => null,
+            'names'       => null,                        // route name filter, e.g. 'app.*'
         ],
     ],
 ];
@@ -356,6 +357,7 @@ All generated files are written to the `output_path` configured in `config/types
 | Option | Default | Description |
 |--------|---------|-------------|
 | `match` | `*` | URL prefix to filter routes. `*` matches all, `/api/store` matches only routes under that path |
+| `names` | `null` | Route name pattern, or list of patterns, a route must also match (`Str::is` syntax, e.g. `app.*`). `null` keeps every name |
 | `name` | — | Output filename (without extension) |
 | `rootUrl` | `APP_URL` | Base URL for absolute URLs |
 | `absolute` | `true` | Generate absolute (`https://…`) or relative (`/…`) URLs |
@@ -383,6 +385,20 @@ Split routes into separate typed files per API consumer:
 ```
 
 This generates `store.ts` and `admin.ts`, each with their own `StoreRouteParams` / `AdminRouteParams` / `StoreRouteResponse` / `AdminRouteResponse` interfaces.
+
+### Selecting routes by name
+
+When the routes a consumer needs share a name prefix but not a URL prefix (the pages of a
+single-page app, say), select them with `names` instead:
+
+```php
+'modules' => [
+    ['match' => '/api', 'name' => 'api'],
+    ['match' => '*', 'name' => 'app', 'names' => 'app.*', 'absolute' => false],
+],
+```
+
+`match` and `names` combine: a route lands in the module only when both accept it.
 
 ## License
 

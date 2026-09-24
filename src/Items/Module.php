@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli\Items;
 
+use Illuminate\Support\Str;
+
 use function ltrim;
 
 final readonly class Module
@@ -18,6 +20,8 @@ final readonly class Module
         private ?string $path,
         private bool $absolute,
         private ?string $stripPrefix = null,
+        /** @var list<string>|null */
+        private ?array $names = null,
     ) {
         $this->match = ltrim($match, '/');
     }
@@ -55,5 +59,14 @@ final readonly class Module
     public function stripPrefix(): ?string
     {
         return $this->stripPrefix;
+    }
+
+    /**
+     * Whether a route name passes the module's `names` filter. No filter lets every
+     * name through; otherwise the name must match one of the `Str::is` patterns.
+     */
+    public function matchesName(string $name): bool
+    {
+        return $this->names === null || Str::is($this->names, $name);
     }
 }

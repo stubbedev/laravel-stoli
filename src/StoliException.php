@@ -29,6 +29,11 @@ final class StoliException extends RuntimeException
         return self::wrap("Could not export routes for module <$module>", $previous);
     }
 
+    public static function cantDiscoverConstants(?Throwable $previous = null): self
+    {
+        return self::wrap('Could not discover the classes to export constants from', $previous);
+    }
+
     public static function cantExportConstants(?Throwable $previous = null): self
     {
         return self::wrap('Could not export constants', $previous);

@@ -53,10 +53,17 @@ final readonly class TypeScriptFileCompiler
         foreach ($file->routes() as $route) {
             $host = $route->host();
 
-            $entries[$route->name()] = TypeScript::object([
+            $entry = [
                 'host' => $host === null ? 'null' : TypeScript::string($host),
                 'uri' => TypeScript::string($route->uri()),
-            ], 1);
+            ];
+
+            // Tells the route service not to swap this host for a rootUrl.
+            if ($host !== null && $route->hasDomain()) {
+                $entry['domain'] = 'true';
+            }
+
+            $entries[$route->name()] = TypeScript::object($entry, 1);
         }
 
         return TypeScript::object($entries);

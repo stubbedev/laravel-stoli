@@ -1,6 +1,8 @@
 export interface Route {
 	uri: string;
 	host: string | null;
+	/** Set when the host is the route's own domain, which a rootUrl does not replace. */
+	domain?: true;
 }
 
 export interface StoliConfig<Routes extends Record<string, Route> = Record<string, Route>> {
@@ -97,10 +99,10 @@ export interface PaginationLink {
 }
 
 /**
- * A spatie/laravel-data PaginatedDataCollection as it is sent.
+ * A spatie/laravel-data PaginatedDataCollection as it is sent. The items are under
+ * `data`, or under the `data.wrap` key when laravel-data is configured to wrap.
  */
-export interface Paginated<T> {
-	data: T[];
+export type Paginated<T, Key extends string = 'data'> = { [K in Key]: T[] } & {
 	links: PaginationLink[];
 	meta: {
 		current_page: number;
@@ -115,13 +117,13 @@ export interface Paginated<T> {
 		to: number | null;
 		total: number;
 	};
-}
+};
 
 /**
- * A spatie/laravel-data CursorPaginatedDataCollection as it is sent.
+ * A spatie/laravel-data CursorPaginatedDataCollection as it is sent. The items are
+ * under `data`, or under the `data.wrap` key when laravel-data is configured to wrap.
  */
-export interface CursorPaginated<T> {
-	data: T[];
+export type CursorPaginated<T, Key extends string = 'data'> = { [K in Key]: T[] } & {
 	links: [];
 	meta: {
 		path: string;
@@ -131,4 +133,4 @@ export interface CursorPaginated<T> {
 		prev_cursor: string | null;
 		prev_page_url: string | null;
 	};
-}
+};

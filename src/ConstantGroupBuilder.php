@@ -27,6 +27,8 @@ final readonly class ConstantGroupBuilder
 
     /**
      * @return list<ConstantGroup>
+     *
+     * @throws StoliException when the configured directories cannot be scanned
      */
     public function groups(): array
     {
@@ -42,8 +44,10 @@ final readonly class ConstantGroupBuilder
                 ->classes()
                 ->withAttribute(...$attributes)
                 ->get();
-        } catch (Throwable) {
-            return [];
+        } catch (Throwable $error) {
+            // Returning nothing here would leave the last constants file in place as if
+            // it were current.
+            throw StoliException::cantDiscoverConstants($error);
         }
 
         $classes = array_filter($classes, is_string(...));

@@ -102,4 +102,30 @@ final class ConstantGroupBuilderTest extends TestCase
 
         $builder->groups();
     }
+
+    public function test_a_directory_that_cannot_be_scanned_is_an_error(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root reads every directory');
+        }
+
+        $directory = sys_get_temp_dir().'/stoli-unreadable-'.getmypid();
+        mkdir($directory.'/locked', 0o755, true);
+        chmod($directory.'/locked', 0);
+
+        $builder = new ConstantGroupBuilder(new StoliConfig([
+            'constants' => ['paths' => [$directory], 'attributes' => [TypeScriptConstants::class]],
+        ]));
+
+        try {
+            $this->expectException(StoliException::class);
+            $this->expectExceptionMessage('Could not discover the classes to export constants from');
+
+            $builder->groups();
+        } finally {
+            chmod($directory.'/locked', 0o755);
+            rmdir($directory.'/locked');
+            rmdir($directory);
+        }
+    }
 }

@@ -16,7 +16,7 @@ const routes = {
 	'posts.index': { uri: 'posts/{page?}', host: null },
 	'tenant.home': { uri: '{tenant}/home', host: null },
 	search: { uri: 'search', host: null },
-	'tenant.dashboard': { uri: 'dashboard', host: 'https://{account}.example.test' },
+	'tenant.dashboard': { uri: 'dashboard', host: 'https://{account}.example.test', domain: true },
 };
 const route = createRoute({ routes });
 
@@ -62,6 +62,11 @@ assert.throws(() => service.createURLWithoutQuery('users.show'), /Missing requir
 // Parameters in the route domain are filled in and consumed like path parameters
 assert.strictEqual(route('tenant.dashboard', { account: 'acme', tab: 'x' }), 'https://acme.example.test/dashboard?tab=x');
 assert.throws(() => route('tenant.dashboard'), /Missing required parameter "account"/);
+
+// A rootUrl replaces the default host, but not a route's own domain
+const proxied = createRoute({ routes, rootUrl: 'http://localhost:8000' });
+assert.strictEqual(proxied('search'), 'http://localhost:8000/search');
+assert.strictEqual(proxied('tenant.dashboard', { account: 'acme' }), 'https://acme.example.test/dashboard');
 
 // rootUrl with or without a trailing slash
 assert.strictEqual(new RouteService({ routes, rootUrl: 'https://api.test/' }).generateFullURL('search'), 'https://api.test/search');

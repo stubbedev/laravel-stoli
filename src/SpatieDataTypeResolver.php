@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli;
 
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Routing\Route as LaravelRoute;
 use Illuminate\Support\Str;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
@@ -16,8 +17,10 @@ use PHPStan\PhpDocParser\Parser\PhpDocParser;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
+use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
+use StubbeDev\LaravelStoli\Compilers\TypeScript;
 use StubbeDev\LaravelStoli\Items\DataType;
 use Throwable;
 
@@ -70,8 +73,10 @@ final class SpatieDataTypeResolver
         'array',
         'iterable',
         'Illuminate\\Support\\Enumerable',
-        'Spatie\\LaravelData\\DataCollection',
+        self::DATA_COLLECTION,
     ];
+
+    private const DATA_COLLECTION = 'Spatie\\LaravelData\\DataCollection';
 
     /**
      * Return types laravel-data sends wrapped in data/links/meta, by the stoli.d.ts
@@ -91,8 +96,10 @@ final class SpatieDataTypeResolver
 
     private readonly ClassNameResolver $classNames;
 
-    public function __construct(private readonly TransformerOutput $output)
-    {
+    public function __construct(
+        private readonly TransformerOutput $output,
+        private readonly ?Repository $config = null,
+    ) {
         $this->classNames = new ClassNameResolver;
     }
 
@@ -160,6 +167,11 @@ final class SpatieDataTypeResolver
      *    `@return DataCollection<int, UserData>` becomes UserData[];
      *  - a paginated DataCollection of Data, in the envelope laravel-data sends:
      *    `@return PaginatedDataCollection<int, UserData>` becomes Paginated<UserData>.
+     *
+     * laravel-data wraps what a controller returns the way the response does: a Data
+     * object under its defaultWrap() key or the `data.wrap` config key, a DataCollection
+     * under the config key, and a paginated one renames its `data` key to it. A plain
+     * array or Collection is serialized by Laravel and never wrapped.
      */
     private function resolveResponseType(ReflectionMethod $method): ?DataType
     {
@@ -178,7 +190,10 @@ final class SpatieDataTypeResolver
                 ? $this->argumentType($tag->genericTypes[0], $method)
                 : null;
 
-            return $argument === null ? $resolved : $resolved?->withArgument($argument);
+            $resolved = $argument === null ? $resolved : $resolved?->withArgument($argument);
+            $wrap = self::classWrap($class) ?? $this->globalWrap();
+
+            return $wrap === null ? $resolved : $resolved?->wrapped($wrap);
         }
 
         $item = $this->itemType($tag, $method);
@@ -193,18 +208,58 @@ final class SpatieDataTypeResolver
             // The envelope types ship in stoli.d.ts, next to the route service.
             $directory = $this->output->directory;
 
-            return $directory === null
-                ? null
-                : DataType::imported($envelope, Utils::absolutePath($directory.'/stoli.d.ts'))->withArgument($item);
+            if ($directory === null) {
+                return null;
+            }
+
+            $envelopeType = DataType::imported($envelope, Utils::absolutePath($directory.'/stoli.d.ts'));
+            $wrap = $this->globalWrap();
+
+            return $wrap === null || $wrap === 'data'
+                ? $envelopeType->withArgument($item)
+                : $envelopeType->withArgument($item, TypeScript::string($wrap));
         }
 
         foreach (self::LIST_TYPES as $listType) {
             if ($class === $listType || is_a($class, $listType, true)) {
-                return $item->list();
+                $wrap = is_a($class, self::DATA_COLLECTION, true) ? $this->globalWrap() : null;
+
+                return $wrap === null ? $item->list() : $item->list()->wrapped($wrap);
             }
         }
 
         return null;
+    }
+
+    /**
+     * The key a Data class wraps itself in through defaultWrap(), which takes
+     * precedence over the `data.wrap` config key.
+     */
+    private static function classWrap(string $class): ?string
+    {
+        if (! class_exists($class)) {
+            return null;
+        }
+
+        try {
+            // defaultWrap() is an instance method, but only ever returns a key.
+            $data = (new ReflectionClass($class))->newInstanceWithoutConstructor();
+            $key = method_exists($data, 'defaultWrap') ? $data->defaultWrap() : null;
+        } catch (Throwable) {
+            return null;
+        }
+
+        return is_string($key) && $key !== '' ? $key : null;
+    }
+
+    /**
+     * The `data.wrap` key of the laravel-data config: null when responses are not wrapped.
+     */
+    private function globalWrap(): ?string
+    {
+        $key = $this->config?->get('data.wrap');
+
+        return is_string($key) && $key !== '' ? $key : null;
     }
 
     /**

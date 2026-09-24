@@ -59,6 +59,7 @@ final class GeneratedTypeScriptTest extends TestCase
         $router->get('api/users/cursor', [UserController::class, 'cursor'])->name('users.cursor');
         $router->get('api/users/wrapped', [UserController::class, 'wrapped'])->name('users.wrapped');
         $router->get('api/users/list', [UserController::class, 'list'])->name('users.list');
+        $router->get('api/users/wrapped-by-class', [UserController::class, 'wrappedByClass'])->name('users.wrappedByClass');
         $router->get('api/users/{user}', [UserController::class, 'show'])->whereNumber('user')->name('users.show');
         $router->put('api/users/{user}', [UserController::class, 'update'])->whereNumber('user')->name('users.update');
         $router->get('api/kinds/{kind}', static fn () => [])->whereIn('kind', ['a', 'b'])->name('kinds.show');

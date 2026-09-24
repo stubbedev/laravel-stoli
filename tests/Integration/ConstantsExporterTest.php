@@ -152,10 +152,51 @@ final class ConstantsExporterTest extends TestCase
             new ConstantGroupBuilder($config),
             new ConstantsFileCompiler,
             self::create(GeneratedFileWriter::class),
+            new Filesystem,
         );
 
         $exporter->publish();
 
         $this->assertFileDoesNotExist(self::generatedFile());
+    }
+
+    private function exporterWithoutConstants(): ConstantsExporter
+    {
+        // A directory with no attributed classes in it: nothing is discovered.
+        $config = new StoliConfig([
+            'constants' => [
+                'path' => self::tmp().'/types',
+                'paths' => [dirname(__DIR__).'/Fixtures/TypeScript/Data'],
+                'attributes' => [TypeScriptConstants::class],
+            ],
+        ]);
+
+        return new ConstantsExporter(
+            $config,
+            new ConstantGroupBuilder($config),
+            new ConstantsFileCompiler,
+            self::create(GeneratedFileWriter::class),
+            new Filesystem,
+        );
+    }
+
+    public function test_a_generated_file_is_removed_once_no_constants_are_left(): void
+    {
+        self::create(ConstantsExporter::class)->publish();
+        $this->assertFileExists(self::generatedFile());
+
+        $this->exporterWithoutConstants()->publish();
+
+        $this->assertFileDoesNotExist(self::generatedFile());
+    }
+
+    public function test_a_file_stoli_did_not_generate_is_left_alone(): void
+    {
+        (new Filesystem)->ensureDirectoryExists(dirname(self::generatedFile()));
+        (new Filesystem)->put(self::generatedFile(), "export const HANDWRITTEN = 1;\n");
+
+        $this->exporterWithoutConstants()->publish();
+
+        $this->assertFileExists(self::generatedFile());
     }
 }

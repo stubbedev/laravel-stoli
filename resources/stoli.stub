@@ -39,7 +39,8 @@ export class RouteService {
 	}
 
 	#getHostname(route) {
-		return this.#rootUrl ?? route.host ?? '';
+		// A route with its own domain keeps it; rootUrl only replaces the default host.
+		return route.domain ? (route.host ?? '') : (this.#rootUrl ?? route.host ?? '');
 	}
 
 	// eslint-disable-next-line class-methods-use-this

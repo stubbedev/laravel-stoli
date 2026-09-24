@@ -76,4 +76,30 @@ final class SpatieDataTypeResolverCollectionsTest extends TestCase
             $this->response('paginated')?->imports,
         );
     }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function wrappedResponses(): iterable
+    {
+        yield 'Data class under the config key' => ['show', '{ items: '.self::DATA.'.UserData }'];
+        yield 'defaultWrap() over the config key' => ['wrappedByClass', '{ user: '.self::DATA.'.WrappedUserData }'];
+        yield 'DataCollection under the config key' => ['index', '{ items: '.self::DATA.'.UserData[] }'];
+        yield 'plain array, never wrapped' => ['list', self::DATA.'.UserData[]'];
+        yield 'paginated items under the config key' => ['paginated', 'Paginated<'.self::DATA.".UserData, 'items'>"];
+    }
+
+    #[DataProvider('wrappedResponses')]
+    public function test_it_wraps_the_response_like_laravel_data(string $method, string $expected): void
+    {
+        config(['data.wrap' => 'items']);
+
+        self::assertSame($expected, $this->response($method)?->type);
+    }
+
+    public function test_without_a_config_key_only_defaultwrap_wraps(): void
+    {
+        self::assertSame('{ user: '.self::DATA.'.WrappedUserData }', $this->response('wrappedByClass')?->type);
+        self::assertSame(self::DATA.'.UserData', $this->response('show')?->type);
+    }
 }

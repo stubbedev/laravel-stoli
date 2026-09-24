@@ -46,7 +46,7 @@ final readonly class Route
             return null;
         }
 
-        if ($this->host === null || $this->host === '') {
+        if ($this->host === null || ! $this->hasDomain()) {
             return trim($this->rootUrl, '/');
         }
 
@@ -59,6 +59,14 @@ final readonly class Route
         $scheme = parse_url($this->rootUrl, PHP_URL_SCHEME);
 
         return (is_string($scheme) ? "{$scheme}:" : '')."//{$host}";
+    }
+
+    /**
+     * Whether the route has a domain of its own rather than the module's root URL.
+     */
+    public function hasDomain(): bool
+    {
+        return $this->host !== null && $this->host !== '';
     }
 
     public function uri(): string

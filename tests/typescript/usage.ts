@@ -23,6 +23,7 @@ function expectType<T extends true>(): void {}
 
 type User = StubbeDev.LaravelStoli.Tests.Fixtures.TypeScript.Data.UserData;
 type Wrapped<T> = StubbeDev.LaravelStoli.Tests.Fixtures.TypeScript.Data.ApiResponseData<T>;
+type WrappedUser = StubbeDev.LaravelStoli.Tests.Fixtures.TypeScript.Data.WrappedUserData;
 
 // Route names are literal, so they autocomplete and a typo is an error
 expectType<Equal<'users.show' extends ApiRouteName ? true : false, true>>();
@@ -41,6 +42,12 @@ expectType<Equal<ApiRouteResponse['users.list'], User[]>>();
 expectType<Equal<ApiRouteResponse['users.paginated'], Paginated<User>>>();
 expectType<Equal<ApiRouteResponse['users.cursor'], CursorPaginated<User>>>();
 expectType<Equal<ApiRouteResponse['users.wrapped'], Wrapped<User>>>();
+
+// laravel-data wrapping: a class's defaultWrap() key, and a paginated envelope's items key
+expectType<Equal<ApiRouteResponse['users.wrappedByClass'], { user: WrappedUser }>>();
+expectType<Equal<Paginated<User, 'items'>['items'], User[]>>();
+expectType<Equal<Paginated<User, 'items'>['meta']['total'], number>>();
+expectType<Equal<'data' extends keyof Paginated<User, 'items'> ? true : false, false>>();
 
 // Each HTTP method only takes its own routes
 expectType<Equal<'users.show' extends ApiGetRouteName ? true : false, true>>();

@@ -98,7 +98,7 @@ final readonly class TransformerOutput
         $writerDirectory = dirname($writerPath);
 
         // The writer usually holds a bare filename, relative to the output directory.
-        if (! str_starts_with($writerPath, '/') && $outputDirectory !== null) {
+        if (! Utils::isAbsolutePath($writerPath) && $outputDirectory !== null) {
             return [
                 $outputDirectory.($writerDirectory !== '.' ? DIRECTORY_SEPARATOR.$writerDirectory : ''),
                 $outputDirectory.DIRECTORY_SEPARATOR.$writerPath,

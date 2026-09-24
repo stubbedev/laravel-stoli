@@ -443,7 +443,7 @@ final class TypeScriptFileCompilerTest extends TestCase
 
         $output = $this->compiler->compile(self::makeFile('api', [$route]));
 
-        self::assertStringContainsString("host: 'https://{account}.app.test',", $output);
+        self::assertStringContainsString("host: 'https://{account}.app.test',\n\t\turi: 'home',\n\t\tdomain: true,", $output);
         self::assertStringContainsString("'tenant.home': { account: string; [key: string]: unknown };", $output);
     }
 }

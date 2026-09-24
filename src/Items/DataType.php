@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli\Items;
 
+use StubbeDev\LaravelStoli\Compilers\TypeScript;
+
 /**
  * A TypeScript type a route takes or returns, built from the types the
  * typescript-transformer generated for Spatie Data classes.
@@ -32,13 +34,33 @@ final readonly class DataType
     }
 
     /**
-     * The same type applied to a generic argument, e.g. ApiResponseData<UserData>.
+     * The same type applied to generic arguments, e.g. ApiResponseData<UserData>. A
+     * string argument is an already rendered type that needs no import.
      */
-    public function withArgument(self|string $argument): self
+    public function withArgument(self|string ...$arguments): self
     {
-        return is_string($argument)
-            ? new self("{$this->type}<{$argument}>", $this->imports)
-            : new self("{$this->type}<{$argument->type}>", self::merge($this->imports, $argument->imports));
+        $types = [];
+        $imports = $this->imports;
+
+        foreach ($arguments as $argument) {
+            if (is_string($argument)) {
+                $types[] = $argument;
+            } else {
+                $types[] = $argument->type;
+                $imports = self::merge($imports, $argument->imports);
+            }
+        }
+
+        return new self("{$this->type}<".implode(', ', $types).'>', $imports);
+    }
+
+    /**
+     * This type as the value of an object with a single $key, the way laravel-data
+     * wraps a response.
+     */
+    public function wrapped(string $key): self
+    {
+        return new self('{ '.TypeScript::key($key).": {$this->type} }", $this->imports);
     }
 
     /**

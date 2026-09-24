@@ -57,6 +57,13 @@ api.generateFullURL("store.products.list");
 // => https://example.com/api/store/products
 ```
 
+Pass `rootUrl` to point the URLs somewhere else at runtime, a dev proxy say. It replaces the
+generated host of every route except those with a domain of their own:
+
+```typescript
+const local = new RouteService({ routes, rootUrl: "http://localhost:8000" });
+```
+
 ### Typed parameters
 
 The generated route file exports `ApiRouteParams` and `ApiRouteName`. URI parameters (`{id}`, `{slug?}`) and route domain parameters (`{account}.example.com`) are always included. When a controller method accepts a `Spatie\LaravelData\Data` object, its generated type is intersected with them, so the request body is typed too.
@@ -120,6 +127,12 @@ Types written by the transformer's `GlobalNamespaceWriter` are ambient globals a
 import type { UserData } from '../types/generated';
 'api.users.show': UserData;
 ```
+
+Response types follow laravel-data's wrapping. A returned Data object is wrapped under its
+`defaultWrap()` key, or otherwise the `data.wrap` key in `config/data.php`
+(`{ data: UserData }`); a `DataCollection` under the config key; and a paginated collection
+has its `data` key renamed to it (`Paginated<UserData, 'items'>`). Plain arrays and Laravel
+collections are sent by Laravel itself and never wrapped.
 
 Routes without a resolvable response type are absent from the interface. The axios router (see below) falls back to `Record<string, unknown>` for those routes.
 
@@ -189,7 +202,9 @@ in `config/stoli.php` to Stoli's own attribute to opt out of that.
 | `JsonSerializable` | its serialized value |
 
 Constants holding anything else — a plain object, a resource — are left out, and a class left
-without a single exportable constant is dropped from the file.
+without a single exportable constant is dropped from the file. When no constants are left
+at all, a `constants.ts` an earlier run generated is removed; a directory that cannot be
+scanned is reported as an error rather than leaving the old file in place.
 
 ### Axios router (optional)
 
@@ -307,7 +322,7 @@ All generated files are written to the `outputDirectory` configured in `config/t
 | `names` | `null` | Route name pattern, or list of patterns, a route must also match (`Str::is` syntax, e.g. `app.*`). `null` keeps every name |
 | `standalone` | `false` | Keep the module in its own file even when `split` is `false`, and generate no axios router for it |
 | `name` | — | Output filename (without extension) |
-| `rootUrl` | `APP_URL` | Base URL for absolute URLs |
+| `rootUrl` | `APP_URL` | Base URL for absolute URLs. A route with its own domain (`Route::domain()`) keeps its domain, with the scheme taken from this URL |
 | `absolute` | `true` | Generate absolute (`https://…`) or relative (`/…`) URLs |
 | `prefix` | `null` | Prefix prepended to every generated URL |
 | `path` | transformer output dir | Output directory for this module's `.ts` file |

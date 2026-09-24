@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli\Exporters;
 
+use Illuminate\Filesystem\Filesystem;
 use StubbeDev\LaravelStoli\Compilers\ConstantsFileCompiler;
 use StubbeDev\LaravelStoli\ConstantGroupBuilder;
 use StubbeDev\LaravelStoli\GeneratedFileWriter;
@@ -24,6 +25,7 @@ final readonly class ConstantsExporter
         private ConstantGroupBuilder $builder,
         private ConstantsFileCompiler $compiler,
         private GeneratedFileWriter $writer,
+        private Filesystem $filesystem,
     ) {}
 
     public function publish(): void
@@ -38,17 +40,32 @@ final readonly class ConstantsExporter
             return;
         }
 
+        $file = join_paths($path, "{$this->config->constantsFileName()}.ts");
+
         try {
             $content = $this->compiler->compile($this->builder->groups());
 
-            // Nothing was discovered — leave whatever is on disk alone.
             if ($content === '') {
+                $this->removeGenerated($file);
+
                 return;
             }
 
-            $this->writer->write(join_paths($path, "{$this->config->constantsFileName()}.ts"), $content);
+            $this->writer->write($file, $content);
         } catch (Throwable $error) {
             throw StoliException::cantExportConstants($error);
+        }
+    }
+
+    /**
+     * With no constants left to export, a file an earlier run generated is stale. One
+     * without the generated header was not written by Stoli and is left alone.
+     */
+    private function removeGenerated(string $file): void
+    {
+        if ($this->filesystem->exists($file)
+            && str_starts_with($this->filesystem->get($file), ConstantsFileCompiler::HEADER)) {
+            $this->filesystem->delete($file);
         }
     }
 }

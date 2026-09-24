@@ -1,13 +1,13 @@
 # Laravel Stoli
 
-[![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](license)
+[![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE)
 
-`stubbedev/laravel-stoli` is a Laravel package that exports your application's named routes to TypeScript, enabling you to use route names instead of hardcoded URLs in your frontend code. It builds on top of [`spatie/laravel-data`](https://github.com/spatie/laravel-data) and [`spatie/laravel-typescript-transformer`](https://github.com/spatie/laravel-typescript-transformer) — both are required dependencies — and generates fully typed TypeScript definitions including parameter types inferred from FormRequest validation rules, URI constraint types, and response types derived from Data classes and the transformer's generated output.
+`stubbedev/laravel-stoli` is a Laravel package that exports your application's named routes to TypeScript, enabling you to use route names instead of hardcoded URLs in your frontend code. It builds on top of [`spatie/laravel-data`](https://github.com/spatie/laravel-data) and [`spatie/laravel-typescript-transformer`](https://github.com/spatie/laravel-typescript-transformer) — both are required dependencies — and generates fully typed TypeScript definitions: route names, URI and domain parameters narrowed by their `where` constraints, and request and response types taken from the Data classes `typescript:transform` has already turned into TypeScript.
 
 ## Requirements
 
 - PHP 8.2+
-- Laravel 11.15+
+- Laravel 12 or 13
 - `spatie/laravel-data` ^3|^4
 - `spatie/laravel-typescript-transformer` ^3
 
@@ -59,19 +59,24 @@ api.generateFullURL("store.products.list");
 
 ### Typed parameters
 
-The generated route file exports `ApiRouteParams` and `ApiRouteName`. URI parameters (`{id}`, `{slug?}`) are always included. When a controller method accepts a `FormRequest`, its validation rules are also included as typed fields.
+The generated route file exports `ApiRouteParams` and `ApiRouteName`. URI parameters (`{id}`, `{slug?}`) and route domain parameters (`{account}.example.com`) are always included. When a controller method accepts a `Spatie\LaravelData\Data` object, its generated type is intersected with them, so the request body is typed too.
 
 ```typescript
 import routes, { type ApiRouteParams, type ApiRouteName } from "./api";
-import { RouteService } from "./stoli";
+import { createRoute } from "./stoli";
 
-const api = new RouteService({ routes });
+const route = createRoute({ routes });
 
 // Route name autocompletion + typed params
-api.generateFullURL("admin.products.update", { id: 42, name: "Notebook" });
-//                                             ^^              ^^^^^^^^^^^
-//                   required URI param (string | number)   from FormRequest
+route("admin.products.update", { id: 42, name: "Notebook" });
+//                               ^^        ^^^^^^^^^^^^^^^^
+//               required URI param     from the ProductData request type
+
+route("admin.products.update"); // type error: `id` is required
 ```
+
+Required parameters are required in the types as well: a route with any may not be called
+without them, while `{param?}` parameters may be left out or passed as `null`.
 
 #### URI constraint types
 
@@ -81,103 +86,42 @@ When routes declare `->where()` constraints, the parameter type is narrowed acco
 Route::get('/users/{id}', ...)->whereNumber('id');           // id: number
 Route::get('/posts/{slug}', ...)->whereAlpha('slug');         // slug: string
 Route::get('/items/{type}', ...)->whereIn('type', ['a','b']); // type: 'a' | 'b'
+Route::get('/v/{version}', ...)->whereIn('version', [1, 2]);  // version: '1' | 1 | '2' | 2
 ```
 
 Without a constraint the type is `string | number`. Optional parameters (`{param?}`) become `param?: type`.
 
-#### FormRequest parameter types
-
-Validation rules are reflected directly into TypeScript:
-
-| Laravel rule | TypeScript type |
-|---|---|
-| `string`, `email`, `url`, `uuid`, … | `string` |
-| `integer`, `numeric`, `decimal:…` | `number` |
-| `boolean`, `accepted`, `declined` | `boolean` |
-| `array` | `Record<string, unknown>` |
-| `list`, `distinct` | `unknown[]` |
-| `file`, `image` | `File` |
-| `in:a,b,c` / `Rule::enum(MyEnum::class)` | `'a' \| 'b' \| 'c'` |
-| `nullable` modifier | adds `\| null` |
-| Nested dot-notation (`address.city`) | inline object type |
-| Wildcard arrays (`tags.*`) | `string[]` / `{ … }[]` |
-
 ### Typed responses
 
-Each generated module also exports `ApiRouteResponse`, a per-route map of response shapes. A route is included in the interface when its controller method has a return type annotation that is a `Spatie\LaravelData\Data` subclass and that class has been transformed by `php artisan typescript:transform`.
-
-The generated interface looks like:
-
-```typescript
-import type { UserData, UserResource } from '../types/generated';
-
-export interface ApiRouteResponse {
-    'api.users.show': UserData;
-    'api.users.index': UserResource;
-}
-```
-
-Routes without a resolvable Data return type are absent from the interface. The axios router (see below) falls back to `Record<string, unknown>` for those routes.
-
-#### Spatie Laravel Data
-
-Controllers returning `Spatie\LaravelData\Data` objects are detected automatically. The TypeScript shape is derived from the class's public typed properties:
-
-```php
-class UserData extends Data
-{
-    public function __construct(
-        public int $id,
-        public string $name,
-        public ?string $bio,
-        public AddressData $address,
-
-        #[DataCollectionOf(TagData::class)]
-        public DataCollection $tags,
-    ) {}
-}
-```
-
-Generates:
-
-```typescript
-'api.users.show': { id: number; name: string; bio: string | null; address: { street: string; city: string }; tags: { id: number; label: string }[] }
-```
-
-Supported property types:
-
-| PHP type | TypeScript type |
-|---|---|
-| `int`, `float` | `number` |
-| `string` | `string` |
-| `bool` | `boolean` |
-| `?type` / `type\|null` | `type \| null` |
-| Nested `Data` subclass | inline object type |
-| `DataCollection` + `#[DataCollectionOf(T::class)]` | `T[]` |
-| `array` + `#[DataCollectionOf(T::class)]` | `T[]` |
-| `DateTimeInterface` | `string` |
-| `Collection` | `unknown[]` |
-
-#### Spatie Laravel TypeScript Transformer
-
-When `php artisan typescript:transform` has already been run, Stoli uses the generated type names directly instead of re-deriving inline shapes:
-
-```typescript
-// Without typescript:transform (inline shape):
-'api.users.show': { id: number; name: string; email: string | null };
-
-// With typescript:transform (type reference + import):
-import type { UserData } from '../types/generated';
-// ...
-'api.users.show': UserData;
-```
-
-The import path is computed relative to the module's output directory. Always run `typescript:transform` before `stoli:generate`:
+Each generated module also exports `ApiRouteResponse`, a per-route map of response types. A route is included when its controller method returns a `Spatie\LaravelData\Data` subclass, or a collection of one, that `php artisan typescript:transform` has turned into TypeScript. Always run `typescript:transform` before `stoli:generate`:
 
 ```bash
 php artisan typescript:transform
 php artisan stoli:generate
 ```
+
+| Controller return type | Response type |
+|---|---|
+| `UserData` | `UserData` |
+| `ApiResponseData` with `@return ApiResponseData<UserData>` | `ApiResponseData<UserData>` |
+| `DataCollection`, `Collection` or `array` with `@return DataCollection<int, UserData>`, `list<UserData>` or `UserData[]` | `UserData[]` |
+| `PaginatedDataCollection` with `@return PaginatedDataCollection<int, UserData>` | `Paginated<UserData>` |
+| `CursorPaginatedDataCollection` with `@return CursorPaginatedDataCollection<int, UserData>` | `CursorPaginated<UserData>` |
+
+`Paginated` and `CursorPaginated` describe the `data`/`links`/`meta` envelope laravel-data sends and are exported from `stoli.d.ts`. Class names in `@return` tags are resolved the way PHP resolves them in the controller's file: through its `use` imports, grouped and aliased ones included, then relative to its namespace.
+
+Types written by the transformer's `GlobalNamespaceWriter` are ambient globals and are referenced by their namespace path; types written as module exports are imported, with the path computed relative to the module's output directory:
+
+```typescript
+// declare namespace output
+'api.users.show': App.Data.UserData;
+
+// module output
+import type { UserData } from '../types/generated';
+'api.users.show': UserData;
+```
+
+Routes without a resolvable response type are absent from the interface. The axios router (see below) falls back to `Record<string, unknown>` for those routes.
 
 ### Typed constants
 
@@ -255,14 +199,14 @@ Enable in `config/stoli.php`:
 'axios' => true,
 ```
 
-The generated router (`api.router.ts`) wraps axios with full type inference for both params and responses:
+The generated router (`router.ts`, or `<module>.router.ts` for each module when there are several) wraps axios with full type inference for both params and responses:
 
 ```typescript
-import { Stoli } from "./api.router";
+import { Stoli } from "./router";
 
 // params typed from ApiRouteParams, response typed from ApiRouteResponse
 const response = await Stoli.get("api.users.show", { id: 1 });
-response.data; // typed as { data: { id: number; name: string; email: string } }
+response.data; // typed as UserData
 
 // routes without a detected response fall back to Record<string, unknown>
 const list = await Stoli.get("api.products.index");
@@ -271,17 +215,16 @@ list.data; // typed as Record<string, unknown>
 
 #### File uploads
 
-Pass files as normal params — a body containing a `File`/`Blob` (or an array of them) is sent as
-`multipart/form-data`, serialized by axios. Params stay fully typed, so file fields are checked
-against the Data type (map `UploadedFile` to `File` in your typescript-transformer config):
+Pass files as normal params — a body containing a `File`/`Blob` anywhere, however deeply nested, is sent as `multipart/form-data`. Params stay fully typed, so file fields are checked against the Data type (map `UploadedFile` to `File` in your typescript-transformer config):
 
 ```typescript
 await Stoli.post("api.folders.files.store", { folder: 42, file, title: "Report" });
 ```
 
-`post`, `put` and `patch` also accept a raw `FormData` for hand-built or deeply nested forms.
-Route parameters are read from the FormData and stripped from the body; axios sets the
-multipart `Content-Type` itself. No type checking on the fields in this form:
+The body is flattened the way PHP reads it back (`meta[tags][]`, `rows[0][id]`) with booleans sent as `1`/`0`, so Laravel validates it as it would a JSON body. PHP only parses multipart bodies on `POST`, so a `put` or `patch` carrying files is sent as a `POST` with `_method` set, which Laravel routes back to the `PUT` or `PATCH` route.
+
+`post`, `put` and `patch` also accept a raw `FormData` for hand-built forms.
+Route parameters are read from the FormData and stripped from the body. No type checking on the fields in this form:
 
 ```typescript
 const form = new FormData();
@@ -311,8 +254,12 @@ api.createURLWithoutQuery("admin.products.show", { id: "abc-123", page: 2 });
 
 Both throw on a missing required parameter rather than emitting a literal `{id}` in the URL.
 Optional parameters (`{page?}`) may be omitted and take their path segment with them.
-Path and query values are URL-encoded; arrays become `tags[]=x&tags[]=y` for Laravel to read
-back as an array.
+
+Query strings are written the way PHP's `http_build_query` writes them, so Laravel reads back
+the same structure: arrays become `tags[]=x&tags[]=y`, nested objects `filter[name]=x`,
+booleans `1`/`0` (what the `boolean` rule accepts), and dates ISO strings. The axios router
+serializes its query parameters the same way. `serializeQuery()` is exported from `stoli.js`
+for building a query string by hand.
 
 ## Configuration
 
@@ -350,13 +297,13 @@ return [
 ];
 ```
 
-All generated files are written to the `output_path` configured in `config/typescript-transformer.php`. Per-module `path` can override this for individual modules.
+All generated files are written to the `outputDirectory` configured in `config/typescript-transformer.php`. Per-module `path` can override this for individual modules.
 
 ### Module options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `match` | `*` | URL prefix to filter routes. `*` matches all, `/api/store` matches only routes under that path |
+| `match` | `*` | URL prefix to filter routes. `*` matches all, `/api/store` matches `api/store` and the routes under it, but not `api/storefront` |
 | `names` | `null` | Route name pattern, or list of patterns, a route must also match (`Str::is` syntax, e.g. `app.*`). `null` keeps every name |
 | `standalone` | `false` | Keep the module in its own file even when `split` is `false`, and generate no axios router for it |
 | `name` | — | Output filename (without extension) |
@@ -403,6 +350,18 @@ single-page app, say), select them with `names` instead:
 `standalone` keeps page routes like these out of the merged single file and out of the
 axios router, which only makes sense for API routes.
 
+## Development
+
+```bash
+just test      # phpunit, the stub checks and the generated TypeScript under tsc --strict
+just analyse   # larastan at max level over config, src and tests
+```
+
+`tests/Integration/GeneratedTypeScriptTest.php` publishes the files for a set of fixture
+routes into `tests/typescript/build` and compiles them against `tests/typescript/usage.ts`,
+which asserts the types every route should narrow to. Run it outside docker after
+`npm ci --prefix tests/typescript`.
+
 ## License
 
-MIT. See [`license`](./license).
+MIT. See [`LICENSE`](./LICENSE).

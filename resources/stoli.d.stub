@@ -8,17 +8,35 @@ export interface StoliConfig<Routes extends Record<string, Route> = Record<strin
 	routes: Routes;
 }
 
-type ExtractParams<T extends string> =
-	T extends `${string}{${infer Param}}${infer Rest}`
-		? (Param extends `${infer Name}?` ? Name : Param) | ExtractParams<Rest>
-		: never;
+type Placeholders<T> = T extends `${string}{${infer Param}}${infer Rest}` ? Param | Placeholders<Rest> : never;
 
+type RouteTemplates<R> = R extends { uri: infer U; host: infer H } ? U | H : never;
+
+type RequiredParam<P> = P extends `${string}?` ? never : P;
+
+type OptionalParam<P> = P extends `${infer Name}?` ? Name : never;
+
+/**
+ * The parameters a route takes: the placeholders in its path and domain, required
+ * unless they end in `?`, plus anything else, which goes out as the query string.
+ */
 export type RouteParams<
 	Routes extends Record<string, Route>,
 	N extends keyof Routes,
-> = Routes[N] extends { uri: infer U extends string; host: infer H }
-	? Partial<Record<ExtractParams<U> | (H extends string ? ExtractParams<H> : never), string | number>> & Record<string, unknown>
-	: Record<string, unknown>;
+> = { [K in RequiredParam<Placeholders<RouteTemplates<Routes[N]>>>]: string | number }
+	& { [K in OptionalParam<Placeholders<RouteTemplates<Routes[N]>>>]?: string | number | null }
+	& Record<string, unknown>;
+
+/**
+ * The arguments after the route name: the parameters may only be left out when the
+ * route has no required ones.
+ */
+export type RouteArguments<
+	Routes extends Record<string, Route>,
+	N extends keyof Routes,
+> = Record<string, never> extends RouteParams<Routes, N>
+	? [parameters?: RouteParams<Routes, N>]
+	: [parameters: RouteParams<Routes, N>];
 
 export class RouteService<Routes extends Record<string, Route> = Record<string, Route>> {
 	constructor(config: StoliConfig<Routes>);
@@ -32,19 +50,13 @@ export class RouteService<Routes extends Record<string, Route> = Record<string, 
 	 * Pass a copy if you still need the object afterwards. Throws when a required
 	 * parameter is missing.
 	 */
-	createURLWithoutQuery<N extends keyof Routes & string>(
-		name: N,
-		parameters?: RouteParams<Routes, N>,
-	): string;
+	createURLWithoutQuery<N extends keyof Routes & string>(name: N, ...parameters: RouteArguments<Routes, N>): string;
 
 	/**
 	 * Build the full URL, query string included. Leaves `parameters` untouched.
 	 * Throws when a required parameter is missing.
 	 */
-	generateFullURL<N extends keyof Routes & string>(
-		name: N,
-		parameters?: RouteParams<Routes, N>,
-	): string;
+	generateFullURL<N extends keyof Routes & string>(name: N, ...parameters: RouteArguments<Routes, N>): string;
 }
 
 export default RouteService;
@@ -62,7 +74,61 @@ export default RouteService;
  */
 export function createRoute<Routes extends Record<string, Route>>(
 	config: StoliConfig<Routes>,
-): <N extends keyof Routes & string>(
-	name: N,
-	parameters?: RouteParams<Routes, N>,
-) => string;
+): <N extends keyof Routes & string>(name: N, ...parameters: RouteArguments<Routes, N>) => string;
+
+/**
+ * Flatten parameters into the key/value pairs PHP reads back into the same structure:
+ * nested keys in brackets, booleans as 1 and 0, dates as ISO strings. Files are kept.
+ */
+export function flattenParameters(parameters: object): Array<[string, string | Blob]>;
+
+/**
+ * Serialize parameters as a query string Laravel reads back into the same structure.
+ */
+export function serializeQuery(parameters: object): string;
+
+/**
+ * A page link of a length-aware paginator.
+ */
+export interface PaginationLink {
+	url: string | null;
+	label: string;
+	active: boolean;
+}
+
+/**
+ * A spatie/laravel-data PaginatedDataCollection as it is sent.
+ */
+export interface Paginated<T> {
+	data: T[];
+	links: PaginationLink[];
+	meta: {
+		current_page: number;
+		first_page_url: string;
+		from: number | null;
+		last_page: number;
+		last_page_url: string;
+		next_page_url: string | null;
+		path: string;
+		per_page: number;
+		prev_page_url: string | null;
+		to: number | null;
+		total: number;
+	};
+}
+
+/**
+ * A spatie/laravel-data CursorPaginatedDataCollection as it is sent.
+ */
+export interface CursorPaginated<T> {
+	data: T[];
+	links: [];
+	meta: {
+		path: string;
+		per_page: number;
+		next_cursor: string | null;
+		next_page_url: string | null;
+		prev_cursor: string | null;
+		prev_page_url: string | null;
+	};
+}

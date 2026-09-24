@@ -40,9 +40,12 @@ deps: composer-install
 
 # Run phpunit inside the built image and check the published stub with node.
 # Depends on build: the image holds the sources, so it has to exist and be current.
+# The TypeScript check needs its own node dependencies, installed first; it runs as the
+# host user so they are not left owned by root.
 # Test filtering goes through the environment: FILTER_TEST_OPTIONS=--filter=x just test
 test: build test-js
-    docker run --rm -v {{current_dir}}:/app -w /app {{image}} vendor/bin/phpunit ${FILTER_TEST_OPTIONS:-} --testdox
+    docker run --rm -v {{current_dir}}:/app -w /app --user $(id -u):$(id -g) -e HOME=/tmp -e STOLI_REQUIRE_TSC=1 {{image}} \
+        sh -c 'npm ci --prefix tests/typescript --no-audit --no-fund --silent && vendor/bin/phpunit ${FILTER_TEST_OPTIONS:-} --testdox'
 
 # Run larastan at max level over config, src and tests inside the built image.
 analyse: build

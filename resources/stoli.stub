@@ -66,24 +66,7 @@ export class RouteService {
 
 	// eslint-disable-next-line class-methods-use-this
 	#getRouteQueryString(parameters) {
-		const query = new URLSearchParams();
-
-		Object.entries(parameters).forEach(([key, value]) => {
-			if (value === null || value === undefined) {
-				return;
-			}
-
-			// Arrays go out Laravel-style; nested objects are not handled, so flatten them first.
-			if (Array.isArray(value)) {
-				value.forEach((item) => query.append(`${key}[]`, item));
-
-				return;
-			}
-
-			query.append(key, value);
-		});
-
-		return query.toString();
+		return serializeQuery(parameters);
 	}
 
 	// eslint-disable-next-line class-methods-use-this
@@ -93,6 +76,54 @@ export class RouteService {
 }
 
 export default RouteService;
+
+/**
+ * Flatten parameters into the key/value pairs PHP reads back into the same structure,
+ * the way http_build_query writes them: nested keys in brackets, a list of scalars as
+ * `tags[]`, booleans as 1 and 0 (what Laravel's `boolean` rule accepts) and dates as
+ * ISO strings. null and undefined are left out; a File or Blob is kept as it is.
+ */
+export function flattenParameters(parameters) {
+	const pairs = [];
+
+	const visit = (key, value) => {
+		if (value === null || value === undefined) {
+			return;
+		}
+
+		if (typeof value === 'boolean') {
+			pairs.push([key, value ? '1' : '0']);
+		} else if (value instanceof Date) {
+			pairs.push([key, value.toISOString()]);
+		} else if (typeof Blob !== 'undefined' && value instanceof Blob) {
+			pairs.push([key, value]);
+		} else if (Array.isArray(value)) {
+			// Items that are themselves structured need an index, or PHP starts a new
+			// element for each of their keys.
+			const indexed = value.some((item) => item !== null && typeof item === 'object' && !(item instanceof Date));
+			value.forEach((item, index) => visit(indexed ? `${key}[${index}]` : `${key}[]`, item));
+		} else if (typeof value === 'object') {
+			Object.entries(value).forEach(([name, item]) => visit(`${key}[${name}]`, item));
+		} else {
+			pairs.push([key, String(value)]);
+		}
+	};
+
+	Object.entries(parameters).forEach(([key, value]) => visit(key, value));
+
+	return pairs;
+}
+
+/**
+ * Serialize parameters as a query string Laravel reads back into the same structure.
+ */
+export function serializeQuery(parameters) {
+	const query = new URLSearchParams();
+
+	flattenParameters(parameters).forEach(([key, value]) => query.append(key, typeof value === 'string' ? value : ''));
+
+	return query.toString();
+}
 
 /**
  * Create a standalone `route()` function bound to a RouteService instance.

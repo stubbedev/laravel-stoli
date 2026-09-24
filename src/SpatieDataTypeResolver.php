@@ -6,15 +6,16 @@ namespace StubbeDev\LaravelStoli;
 
 use Illuminate\Routing\Route as LaravelRoute;
 use Illuminate\Support\Str;
+use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
 use PHPStan\PhpDocParser\Parser\ConstExprParser;
 use PHPStan\PhpDocParser\Parser\PhpDocParser;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
-use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
 use StubbeDev\LaravelStoli\Items\DataType;
@@ -63,13 +64,37 @@ final class SpatieDataTypeResolver
     ];
 
     /**
+     * Return types that are sent as a plain JSON array of their items.
+     */
+    private const LIST_TYPES = [
+        'array',
+        'iterable',
+        'Illuminate\\Support\\Enumerable',
+        'Spatie\\LaravelData\\DataCollection',
+    ];
+
+    /**
+     * Return types laravel-data sends wrapped in data/links/meta, by the stoli.d.ts
+     * type describing that envelope.
+     */
+    private const PAGINATED_TYPES = [
+        'Spatie\\LaravelData\\PaginatedDataCollection' => 'Paginated',
+        'Spatie\\LaravelData\\CursorPaginatedDataCollection' => 'CursorPaginated',
+    ];
+
+    /**
      * Exported type path => whether it is ambient, read once from the types file.
      *
      * @var array<string, bool>|null
      */
     private ?array $exports = null;
 
-    public function __construct(private readonly TransformerOutput $output) {}
+    private readonly ClassNameResolver $classNames;
+
+    public function __construct(private readonly TransformerOutput $output)
+    {
+        $this->classNames = new ClassNameResolver;
+    }
 
     /**
      * @return array{request: ?DataType, response: ?DataType}
@@ -127,44 +152,104 @@ final class SpatieDataTypeResolver
     }
 
     /**
-     * The Data class the method returns.
+     * The type the method responds with, from its return type and PHPDoc @return tag:
      *
-     * When the PHPDoc @return tag gives it a generic argument, the argument is
-     * resolved too: ApiResponseData<StoreUserResponseData> becomes
-     * App.Http.Data.ApiResponseData<App.Http.Data.StoreUserResponseData>.
+     *  - a Data class, with a generic argument when the tag gives it one:
+     *    `@return ApiResponseData<UserData>` becomes ApiResponseData<UserData>;
+     *  - an array, Collection or DataCollection of Data, as an array of it:
+     *    `@return DataCollection<int, UserData>` becomes UserData[];
+     *  - a paginated DataCollection of Data, in the envelope laravel-data sends:
+     *    `@return PaginatedDataCollection<int, UserData>` becomes Paginated<UserData>.
      */
     private function resolveResponseType(ReflectionMethod $method): ?DataType
     {
         $returnType = $method->getReturnType();
 
-        if (! $returnType instanceof ReflectionNamedType || ! self::isDataClass($returnType->getName())) {
+        if (! $returnType instanceof ReflectionNamedType) {
             return null;
         }
 
-        $resolved = $this->lookup($returnType->getName());
-        $argument = $resolved === null ? null : self::phpDocGenericArgument($method);
+        $class = $returnType->getName();
+        $tag = $this->returnTag($method);
 
-        if ($resolved === null || $argument === null) {
-            return $resolved;
+        if (self::isDataClass($class)) {
+            $resolved = $this->lookup($class);
+            $argument = $tag instanceof GenericTypeNode && count($tag->genericTypes) === 1
+                ? $this->argumentType($tag->genericTypes[0], $method)
+                : null;
+
+            return $argument === null ? $resolved : $resolved?->withArgument($argument);
         }
 
-        $literal = self::TS_LITERAL_TYPES[strtolower($argument)] ?? null;
+        $item = $this->itemType($tag, $method);
 
-        if ($literal !== null) {
-            return $resolved->withArgument($literal);
+        if ($item === null) {
+            return null;
         }
 
-        $inner = $this->lookup($argument);
+        $envelope = self::PAGINATED_TYPES[$class] ?? null;
 
-        return $inner === null ? $resolved : $resolved->withArgument($inner->type, $inner->imports);
+        if ($envelope !== null) {
+            // The envelope types ship in stoli.d.ts, next to the route service.
+            $directory = $this->output->directory;
+
+            return $directory === null
+                ? null
+                : DataType::imported($envelope, Utils::absolutePath($directory.'/stoli.d.ts'))->withArgument($item);
+        }
+
+        foreach (self::LIST_TYPES as $listType) {
+            if ($class === $listType || is_a($class, $listType, true)) {
+                return $item->list();
+            }
+        }
+
+        return null;
     }
 
     /**
-     * The single generic argument of the PHPDoc @return tag, as a fully-qualified
-     * class name, or verbatim when it is one of self::TS_LITERAL_TYPES (e.g. the
-     * "null" in "@return ApiResponseData<null>").
+     * A generic argument: a transformed class, or a non-class type from self::TS_LITERAL_TYPES
+     * (the "null" in "@return ApiResponseData<null>").
      */
-    private static function phpDocGenericArgument(ReflectionMethod $method): ?string
+    private function argumentType(TypeNode $node, ReflectionMethod $method): DataType|string|null
+    {
+        if (! $node instanceof IdentifierTypeNode) {
+            return null;
+        }
+
+        return self::TS_LITERAL_TYPES[strtolower($node->name)] ?? $this->classType($node->name, $method);
+    }
+
+    /**
+     * The Data class a collection holds: the last generic argument of
+     * `Collection<int, UserData>`, or the item of `UserData[]`.
+     */
+    private function itemType(?TypeNode $tag, ReflectionMethod $method): ?DataType
+    {
+        $item = match (true) {
+            $tag instanceof GenericTypeNode => array_values($tag->genericTypes)[count($tag->genericTypes) - 1] ?? null,
+            $tag instanceof ArrayTypeNode => $tag->type,
+            default => null,
+        };
+
+        return $item instanceof IdentifierTypeNode ? $this->classType($item->name, $method) : null;
+    }
+
+    /**
+     * The type the transformer generated for a class named in a PHPDoc tag. Any class
+     * it transformed will do, so an enum argument (ApiResponseData<Status>) works too.
+     */
+    private function classType(string $name, ReflectionMethod $method): ?DataType
+    {
+        $class = $this->classNames->resolve($name, $method->getDeclaringClass());
+
+        return $class === null ? null : $this->lookup($class);
+    }
+
+    /**
+     * The type of the method's PHPDoc @return tag.
+     */
+    private function returnTag(ReflectionMethod $method): ?TypeNode
     {
         $docComment = $method->getDocComment();
 
@@ -182,64 +267,10 @@ final class SpatieDataTypeResolver
         }
 
         foreach ($phpDoc->getReturnTagValues() as $returnTag) {
-            $type = $returnTag->type;
-
-            if (! $type instanceof GenericTypeNode || count($type->genericTypes) !== 1) {
-                continue;
-            }
-
-            $argument = $type->genericTypes[0];
-
-            if (! $argument instanceof IdentifierTypeNode) {
-                continue;
-            }
-
-            if (isset(self::TS_LITERAL_TYPES[strtolower($argument->name)])) {
-                return $argument->name;
-            }
-
-            return self::resolveClassName($argument->name, $method->getDeclaringClass());
+            return $returnTag->type;
         }
 
         return null;
-    }
-
-    /**
-     * Resolve a short class name from a PHPDoc tag to its fully-qualified name
-     * by inspecting the declaring class's namespace and use statements.
-     *
-     * @param  ReflectionClass<object>  $declaringClass
-     */
-    private static function resolveClassName(string $shortName, ReflectionClass $declaringClass): ?string
-    {
-        if (str_starts_with($shortName, '\\')) {
-            return ltrim($shortName, '\\');
-        }
-
-        $file = $declaringClass->getFileName();
-        $source = $file === false ? false : @file_get_contents($file);
-
-        if ($source === false) {
-            return null;
-        }
-
-        // "use Foo\Bar\Baz;" or "use Foo\Bar\Baz as Alias;"
-        preg_match_all('/^use\s+([\w\\\\]+)(?:\s+as\s+(\w+))?\s*;/m', $source, $matches, PREG_SET_ORDER);
-
-        foreach ($matches as $match) {
-            if (($match[2] ?? class_basename($match[1])) === $shortName) {
-                return $match[1];
-            }
-        }
-
-        $namespace = $declaringClass->getNamespaceName();
-        $candidate = $namespace === '' ? $shortName : "{$namespace}\\{$shortName}";
-
-        if (class_exists($candidate)) {
-            return $candidate;
-        }
-
-        return class_exists($shortName) ? $shortName : null;
     }
 
     private static function isDataClass(string $className): bool
@@ -274,7 +305,7 @@ final class SpatieDataTypeResolver
         $dotted = str_replace('\\', '.', ltrim($class, '\\'));
 
         if ($exports[$dotted] ?? false) {
-            return new DataType($dotted, $file);
+            return new DataType($dotted);
         }
 
         $baseName = class_basename($class);
@@ -284,8 +315,8 @@ final class SpatieDataTypeResolver
         }
 
         return $exports[$baseName]
-            ? new DataType($baseName, $file)
-            : new DataType($baseName, $file, [$baseName]);
+            ? new DataType($baseName)
+            : DataType::imported($baseName, $file);
     }
 
     /**

@@ -46,6 +46,9 @@ final class StoliServiceProvider extends ServiceProvider
 
         $this->app->singleton(RouteMatcher::class, StartsWithRouteMatcher::class);
 
+        // Shared, so a batch started by the Publisher covers every exporter's writes.
+        $this->app->singleton(GeneratedFileWriter::class);
+
         $this->commands([
             StoliGenerateCommand::class,
         ]);

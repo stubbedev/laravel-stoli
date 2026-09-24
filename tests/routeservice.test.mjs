@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../resources/stoli.stub', import.meta.url), 'utf8');
-const { RouteService, createRoute } = await import(`data:text/javascript,${encodeURIComponent(source)}`);
+const { RouteService, createRoute, serializeQuery, flattenParameters } = await import(`data:text/javascript,${encodeURIComponent(source)}`);
 
 const routes = {
 	'users.show': { uri: 'users/{user}', host: null },
@@ -24,6 +24,22 @@ const route = createRoute({ routes });
 assert.strictEqual(route('search', { q: 'a b&c=d' }), '/search?q=a+b%26c%3Dd');
 assert.strictEqual(route('search', { tags: ['x', 'y z'] }), '/search?tags%5B%5D=x&tags%5B%5D=y+z');
 assert.strictEqual(route('search', { q: 'x', empty: null, gone: undefined }), '/search?q=x');
+
+// Booleans go out as 1/0, which Laravel's `boolean` rule accepts; 'false' would fail it
+assert.strictEqual(route('search', { active: false, archived: true }), '/search?active=0&archived=1');
+
+// Nested structures use PHP's bracket notation; structured list items get an index
+assert.strictEqual(
+	decodeURIComponent(serializeQuery({ filter: { name: 'x', tags: ['a'] }, rows: [{ id: 1, on: true }] })),
+	'filter[name]=x&filter[tags][]=a&rows[0][id]=1&rows[0][on]=1',
+);
+
+// Dates are sent as ISO strings, not in the local format
+assert.strictEqual(route('search', { at: new Date(0) }), '/search?at=1970-01-01T00%3A00%3A00.000Z');
+
+// Files survive flattening untouched, for multipart bodies
+const file = new Blob(['x']);
+assert.deepStrictEqual(flattenParameters({ file, meta: { n: 1 } }), [['file', file], ['meta[n]', '1']]);
 
 // Path values are encoded
 assert.strictEqual(route('files.show', { path: 'my report.pdf' }), '/files/my%20report.pdf');

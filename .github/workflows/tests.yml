@@ -75,8 +75,15 @@ jobs:
           max_attempts: 5
           command: composer update --no-interaction --no-progress
 
+      # The generated TypeScript is compiled with tsc by GeneratedTypeScriptTest.
+      - name: Install the TypeScript check
+        if: steps.resolve.outputs.ok == 'true'
+        run: npm ci --prefix tests/typescript --no-audit --no-fund
+
       - name: Run tests for Laravel ${{ matrix.laravel }}
         if: steps.resolve.outputs.ok == 'true'
+        env:
+          STOLI_REQUIRE_TSC: '1'
         run: vendor/bin/phpunit
 
       - name: Run larastan for Laravel ${{ matrix.laravel }}

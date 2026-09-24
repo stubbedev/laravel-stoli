@@ -16,13 +16,19 @@ final readonly class Publisher
         private RoutesFileExporter $routesFileExporter,
         private AxiosRouterExporter $axiosRouterExporter,
         private ConstantsExporter $constantsExporter,
+        private GeneratedFileWriter $writer,
     ) {}
 
+    /**
+     * Write every generated file, formatting them together at the end.
+     */
     public function publish(): void
     {
-        $this->routeServiceExporter->publish();
-        $this->routesFileExporter->publish();
-        $this->axiosRouterExporter->publish();
-        $this->constantsExporter->publish();
+        $this->writer->batch(function (): void {
+            $this->routeServiceExporter->publish();
+            $this->routesFileExporter->publish();
+            $this->axiosRouterExporter->publish();
+            $this->constantsExporter->publish();
+        });
     }
 }

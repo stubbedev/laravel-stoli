@@ -196,8 +196,10 @@ final readonly class TypeScriptFileCompiler
 
         foreach ($file->routes() as $route) {
             foreach (array_filter([$route->dataRequestType(), $route->dataResponseType()]) as $dataType) {
-                foreach ($dataType->imports as $name) {
-                    $byFile[$dataType->file][$name] = $name;
+                foreach ($dataType->imports as $typesFile => $names) {
+                    foreach ($names as $name) {
+                        $byFile[$typesFile][$name] = $name;
+                    }
                 }
             }
         }

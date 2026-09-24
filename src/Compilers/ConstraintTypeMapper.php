@@ -9,7 +9,7 @@ namespace StubbeDev\LaravelStoli\Compilers;
  *
  * Precedence:
  *  1. Exact match against Laravel's named-constraint helper patterns (whereNumber, whereAlpha, whereUuid, whereUlid).
- *  2. Simple literal alternation produced by whereIn  →  union of string literals ('a' | 'b').
+ *  2. Simple literal alternation produced by whereIn  →  union of literals ('a' | 'b'; '1' | 1 for integers).
  *  3. Regex that only matches digit-like strings  →  number.
  *  4. Everything else  →  string.
  */
@@ -44,12 +44,20 @@ final class ConstraintTypeMapper
      */
     private function infer(string $regex): string
     {
-        // Simple literal alternation (e.g. "users|groups|all", produced by whereIn) → union of string literals.
-        if (preg_match('/^[a-zA-Z0-9_-]+(\|[a-zA-Z0-9_-]+)*$/', $regex)) {
-            return implode(' | ', array_map(
-                fn (string $v) => "'{$v}'",
-                explode('|', $regex),
-            ));
+        // Simple literal alternation (e.g. "users|groups|all", produced by whereIn) → union of literals.
+        // An integer value is taken as a number too, since a URL segment is text either way.
+        if (preg_match('/^[a-zA-Z0-9_-]+(\|[a-zA-Z0-9_-]+)*$/', $regex) === 1) {
+            $literals = [];
+
+            foreach (explode('|', $regex) as $value) {
+                $literals[] = "'{$value}'";
+
+                if (preg_match('/^(0|[1-9][0-9]*)$/', $value) === 1) {
+                    $literals[] = $value;
+                }
+            }
+
+            return implode(' | ', $literals);
         }
 
         // Generic numeric-only pattern (e.g. "\d+", "[1-9][0-9]*") → number.

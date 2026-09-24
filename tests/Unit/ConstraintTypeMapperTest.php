@@ -64,6 +64,17 @@ final class ConstraintTypeMapperTest extends TestCase
         self::assertSame("'some-slug' | 'other_slug'", $this->mapper->map('some-slug|other_slug'));
     }
 
+    public function test_integer_values_also_accept_the_number(): void
+    {
+        self::assertSame("'1' | 1 | '20' | 20 | 'v3'", $this->mapper->map('1|20|v3'));
+    }
+
+    public function test_a_leading_zero_stays_text_only(): void
+    {
+        // As a number, 01 would go out as 1 and no longer match.
+        self::assertSame("'01' | '0' | 0", $this->mapper->map('01|0'));
+    }
+
     // -------------------------------------------------------------------------
     // Generic digit-only patterns → number
     // -------------------------------------------------------------------------

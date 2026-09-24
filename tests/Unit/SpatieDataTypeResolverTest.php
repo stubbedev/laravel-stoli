@@ -22,6 +22,11 @@ class InnerData extends Data
 {
 }
 
+enum ResolverStatus: string
+{
+    case Active = 'active';
+}
+
 class ResolverStubController
 {
     /**
@@ -36,6 +41,14 @@ class ResolverStubController
      * @return ApiResponseData<InnerData>
      */
     public function classGeneric(): ApiResponseData
+    {
+        throw new LogicException('not called');
+    }
+
+    /**
+     * @return ApiResponseData<ResolverStatus>
+     */
+    public function enumGeneric(): ApiResponseData
     {
         throw new LogicException('not called');
     }
@@ -60,7 +73,7 @@ final class SpatieDataTypeResolverTest extends TestCase
 
         file_put_contents(
             $directory . '/index.d.ts',
-            "export type ApiResponseData<TData> = { data: TData };\nexport type InnerData = { id: number };\n",
+            "export type ApiResponseData<TData> = { data: TData };\nexport type InnerData = { id: number };\nexport type ResolverStatus = 'active';\n",
         );
 
         self::useTransformerOutputDirectory($directory);
@@ -76,9 +89,14 @@ final class SpatieDataTypeResolverTest extends TestCase
         self::assertSame('ApiResponseData<InnerData>', $this->resolveResponseType('classGeneric'));
     }
 
+    public function test_a_transformed_enum_is_a_generic_argument_too(): void
+    {
+        self::assertSame('ApiResponseData<ResolverStatus>', $this->resolveResponseType('enumGeneric'));
+    }
+
     public function test_a_generic_module_export_imports_both_types(): void
     {
-        self::assertSame(['ApiResponseData', 'InnerData'], $this->resolveResponse('classGeneric')?->imports);
+        self::assertSame([['ApiResponseData', 'InnerData']], array_values($this->resolveResponse('classGeneric')->imports ?? []));
     }
 
     public function test_an_ambient_type_is_found_at_its_namespace_path(): void

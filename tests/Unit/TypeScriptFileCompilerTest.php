@@ -182,7 +182,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.create',
                 'api/users',
                 methods: ['POST'],
-                dataRequestType: new DataType('StoreUserRequestData', '/app/types/generated.ts', ['StoreUserRequestData']),
+                dataRequestType: DataType::imported('StoreUserRequestData', '/app/types/generated.ts'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -197,7 +197,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.create',
                 'api/users',
                 methods: ['POST'],
-                dataRequestType: new DataType('StoreUserRequestData', '/app/types/generated.ts', ['StoreUserRequestData']),
+                dataRequestType: DataType::imported('StoreUserRequestData', '/app/types/generated.ts'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -213,7 +213,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.update',
                 'api/users/{userId}',
                 methods: ['PUT'],
-                dataRequestType: new DataType('UpdateUserRequestData', '/app/types/generated.ts', ['UpdateUserRequestData']),
+                dataRequestType: DataType::imported('UpdateUserRequestData', '/app/types/generated.ts'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -229,7 +229,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.create',
                 'api/users',
                 methods: ['POST'],
-                dataRequestType: new DataType('StoreUserRequestData', '/app/resources/routes/types/generated.ts', ['StoreUserRequestData']),
+                dataRequestType: DataType::imported('StoreUserRequestData', '/app/resources/routes/types/generated.ts'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -248,7 +248,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.create',
                 'api/users',
                 methods: ['POST'],
-                dataRequestType: new DataType('App.Http.Data.StoreUserRequestData', '/app/types/generated.ts'),
+                dataRequestType: new DataType('App.Http.Data.StoreUserRequestData'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -263,7 +263,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.create',
                 'api/users',
                 methods: ['POST'],
-                dataRequestType: new DataType('App.Http.Data.StoreUserRequestData', '/app/types/generated.ts'),
+                dataRequestType: new DataType('App.Http.Data.StoreUserRequestData'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -282,7 +282,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.store',
                 'api/users',
                 methods: ['POST'],
-                dataResponseType: new DataType('ApiResponseData', '/app/types/generated.ts', ['ApiResponseData']),
+                dataResponseType: DataType::imported('ApiResponseData', '/app/types/generated.ts'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -308,7 +308,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.store',
                 'api/users',
                 methods: ['POST'],
-                dataResponseType: new DataType('ApiResponseData', '/app/resources/routes/types/generated.ts', ['ApiResponseData']),
+                dataResponseType: DataType::imported('ApiResponseData', '/app/resources/routes/types/generated.ts'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -327,7 +327,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.store',
                 'api/users',
                 methods: ['POST'],
-                dataResponseType: new DataType('App.Http.Data.ApiResponseData', '/app/types/generated.ts'),
+                dataResponseType: new DataType('App.Http.Data.ApiResponseData'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -342,7 +342,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.store',
                 'api/users',
                 methods: ['POST'],
-                dataResponseType: new DataType('App.Http.Data.ApiResponseData', '/app/types/generated.ts'),
+                dataResponseType: new DataType('App.Http.Data.ApiResponseData'),
             ),
         ]);
         $output = $this->compiler->compile($file);
@@ -390,7 +390,7 @@ final class TypeScriptFileCompilerTest extends TestCase
                 'users.create',
                 'api/users',
                 methods: ['POST'],
-                dataRequestType: new DataType('StoreUserRequestData', '/app/resources/types/index.d.ts', ['StoreUserRequestData']),
+                dataRequestType: DataType::imported('StoreUserRequestData', '/app/resources/types/index.d.ts'),
             ),
         ]));
 
@@ -402,8 +402,8 @@ final class TypeScriptFileCompilerTest extends TestCase
 
     public function test_a_generic_response_imports_each_type_by_name(): void
     {
-        $response = (new DataType('ApiResponseData', '/app/types/generated.ts', ['ApiResponseData']))
-            ->withArgument('UserData', ['UserData']);
+        $response = DataType::imported('ApiResponseData', '/app/types/generated.ts')
+            ->withArgument(DataType::imported('UserData', '/app/types/generated.ts'));
 
         $output = $this->compiler->compile(self::makeFile('api', [
             self::makeRoute('users.show', 'api/users/{id}', dataResponseType: $response),

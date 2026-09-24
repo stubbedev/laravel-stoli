@@ -34,6 +34,11 @@ final class StoliException extends RuntimeException
         return self::wrap('Could not export constants', $previous);
     }
 
+    public static function cantFormat(?Throwable $previous = null): self
+    {
+        return self::wrap('Could not format the generated files', $previous);
+    }
+
     public static function cantOverrideLibrary(?Throwable $previous = null): self
     {
         return self::wrap('Could not override library', $previous);

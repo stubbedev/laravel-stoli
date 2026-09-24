@@ -42,7 +42,7 @@ function buildUrl<N extends keyof {{STUDLY}}RouteParams>(
 
 // A body holding a File/Blob has to go out as multipart; axios serializes the object
 // itself once the Content-Type says so, which keeps the params fully typed.
-// ponytail: top level and one array level only — hand a FormData in for deeper shapes.
+// Top level and one array level only; hand a FormData in for deeper shapes.
 function withMultipart(body: Record<string, unknown> | FormData, config: AxiosRequestConfig): AxiosRequestConfig {
 	if (body instanceof FormData) {
 		return config;

@@ -72,7 +72,7 @@ export class RouteService {
 				return;
 			}
 
-			// ponytail: arrays go out Laravel-style; nested objects are not handled — flatten them yourself
+			// Arrays go out Laravel-style; nested objects are not handled, so flatten them first.
 			if (Array.isArray(value)) {
 				value.forEach((item) => query.append(`${key}[]`, item));
 

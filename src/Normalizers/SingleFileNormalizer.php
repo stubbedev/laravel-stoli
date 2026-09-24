@@ -21,9 +21,11 @@ final readonly class SingleFileNormalizer implements Normalizer
             new File(
                 $this->config->defaultSingleFileModuleName(),
                 $this->config->defaultOutputPath(),
-                $files->flatMap(static fn (File $file) => $file->routes())
+                $files->filter(static fn (File $file) => ! $file->standalone())
+                    ->flatMap(static fn (File $file) => $file->routes())
                     ->unique(static fn (Route $route) => $route->name())
             ),
+            ...$files->filter(static fn (File $file) => $file->standalone())->values(),
         ]);
     }
 }

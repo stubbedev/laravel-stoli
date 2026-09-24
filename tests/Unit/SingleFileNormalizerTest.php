@@ -30,9 +30,9 @@ final class SingleFileNormalizerTest extends TestCase
         );
     }
 
-    private static function makeFile(string $name, array $routes): File
+    private static function makeFile(string $name, array $routes, bool $standalone = false): File
     {
-        return new File($name, 'resources/routes', new ArrayList($routes));
+        return new File($name, 'resources/routes', new ArrayList($routes), $standalone);
     }
 
     private static function makeStoliConfig(array $overrides = []): StoliConfig
@@ -93,6 +93,30 @@ final class SingleFileNormalizerTest extends TestCase
         // Path is derived from the typescript-transformer output directory;
         // without a container in unit tests it resolves to null.
         self::assertNull($merged->path());
+    }
+
+    public function test_single_normalizer_keeps_a_standalone_file_out_of_the_merge(): void
+    {
+        $normalizer = new SingleFileNormalizer(self::makeStoliConfig());
+
+        $pages = self::makeFile('pages', [self::makeRoute('app.settings', 'settings')], standalone: true);
+        $result = $normalizer->normalize(new ArrayList([
+            self::makeFile('store', [self::makeRoute('store.cart.show', 'api/store/cart')]),
+            $pages,
+            self::makeFile('admin', [self::makeRoute('admin.users.list', 'api/admin/users')]),
+        ]));
+
+        self::assertSame(2, $result->count());
+
+        /** @var File $merged */
+        [$merged, $standalone] = $result->values();
+
+        self::assertSame('api', $merged->name());
+        self::assertSame(
+            ['store.cart.show', 'admin.users.list'],
+            $merged->routes()->map(static fn (Route $route) => $route->name())->values(),
+        );
+        self::assertSame($pages, $standalone);
     }
 
     // -------------------------------------------------------------------------

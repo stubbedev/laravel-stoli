@@ -36,7 +36,10 @@ final readonly class AxiosRouterExporter
             return;
         }
 
-        $modules = $this->config->modules();
+        $modules = array_filter(
+            $this->config->modules(),
+            static fn (array $module): bool => ! ($module['standalone'] ?? false),
+        );
         $multiple = count($modules) > 1;
 
         foreach ($modules as $module) {

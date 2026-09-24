@@ -22,6 +22,7 @@ final readonly class Module
         private ?string $stripPrefix = null,
         /** @var list<string>|null */
         private ?array $names = null,
+        private bool $standalone = false,
     ) {
         $this->match = ltrim($match, '/');
     }
@@ -65,6 +66,15 @@ final readonly class Module
      * Whether a route name passes the module's `names` filter. No filter lets every
      * name through; otherwise the name must match one of the `Str::is` patterns.
      */
+    /**
+     * A standalone module keeps its own file even when `split` is off, and gets no
+     * axios router: for routes that are not an API, such as a single-page app's pages.
+     */
+    public function standalone(): bool
+    {
+        return $this->standalone;
+    }
+
     public function matchesName(string $name): bool
     {
         return $this->names === null || Str::is($this->names, $name);

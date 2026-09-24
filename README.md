@@ -358,6 +358,7 @@ All generated files are written to the `output_path` configured in `config/types
 |--------|---------|-------------|
 | `match` | `*` | URL prefix to filter routes. `*` matches all, `/api/store` matches only routes under that path |
 | `names` | `null` | Route name pattern, or list of patterns, a route must also match (`Str::is` syntax, e.g. `app.*`). `null` keeps every name |
+| `standalone` | `false` | Keep the module in its own file even when `split` is `false`, and generate no axios router for it |
 | `name` | — | Output filename (without extension) |
 | `rootUrl` | `APP_URL` | Base URL for absolute URLs |
 | `absolute` | `true` | Generate absolute (`https://…`) or relative (`/…`) URLs |
@@ -394,11 +395,13 @@ single-page app, say), select them with `names` instead:
 ```php
 'modules' => [
     ['match' => '/api', 'name' => 'api'],
-    ['match' => '*', 'name' => 'app', 'names' => 'app.*', 'absolute' => false],
+    ['match' => '*', 'name' => 'app', 'names' => 'app.*', 'absolute' => false, 'standalone' => true],
 ],
 ```
 
 `match` and `names` combine: a route lands in the module only when both accept it.
+`standalone` keeps page routes like these out of the merged single file and out of the
+axios router, which only makes sense for API routes.
 
 ## License
 

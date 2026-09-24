@@ -40,6 +40,7 @@ final readonly class ModulesProvider
             $config['absolute'] ?? true,
             $config['stripPrefix'] ?? null,
             isset($config['names']) ? array_values((array) $config['names']) : null,
+            $config['standalone'] ?? false,
         );
     }
 

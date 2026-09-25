@@ -84,6 +84,7 @@ final class SpatieDataTypeResolverCollectionsTest extends TestCase
     {
         yield 'Data class under the config key' => ['show', '{ items: '.self::DATA.'.UserData }'];
         yield 'defaultWrap() over the config key' => ['wrappedByClass', '{ user: '.self::DATA.'.WrappedUserData }'];
+        yield 'own toResponse(), never wrapped' => ['selfResponding', self::DATA.'.SelfRespondingUserData'];
         yield 'DataCollection under the config key' => ['index', '{ items: '.self::DATA.'.UserData[] }'];
         yield 'plain array, never wrapped' => ['list', self::DATA.'.UserData[]'];
         yield 'paginated items under the config key' => ['paginated', 'Paginated<'.self::DATA.".UserData, 'items'>"];

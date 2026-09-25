@@ -6,7 +6,7 @@ namespace StubbeDev\LaravelStoli\Tests\Fixtures\TypeScript;
 
 use LogicException;
 use Spatie\LaravelData\{CursorPaginatedDataCollection, DataCollection, PaginatedDataCollection};
-use StubbeDev\LaravelStoli\Tests\Fixtures\TypeScript\Data\{ApiResponseData, StoreUserData, UserData as User, WrappedUserData};
+use StubbeDev\LaravelStoli\Tests\Fixtures\TypeScript\Data\{ApiResponseData, SelfRespondingUserData, StoreUserData, UserData as User, WrappedUserData};
 
 /**
  * Only reflected on: the Data types come from the signatures and the @return tags, which
@@ -62,6 +62,11 @@ final class UserController
     }
 
     public function wrappedByClass(): WrappedUserData
+    {
+        throw new LogicException('not called');
+    }
+
+    public function selfResponding(): SelfRespondingUserData
     {
         throw new LogicException('not called');
     }

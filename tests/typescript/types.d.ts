@@ -5,4 +5,5 @@ declare namespace StubbeDev.LaravelStoli.Tests.Fixtures.TypeScript.Data {
 	export type StoreUserData = { name: string; admin?: boolean };
 	export type ApiResponseData<TData> = { data: TData };
 	export type WrappedUserData = { id: number };
+	export type SelfRespondingUserData = { id: number };
 }

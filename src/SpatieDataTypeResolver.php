@@ -191,6 +191,10 @@ final class SpatieDataTypeResolver
                 : null;
 
             $resolved = $argument === null ? $resolved : $resolved?->withArgument($argument);
+            if (self::sendsOwnResponse($class)) {
+                return $resolved;
+            }
+
             $wrap = self::classWrap($class) ?? $this->globalWrap();
 
             return $wrap === null ? $resolved : $resolved?->wrapped($wrap);
@@ -229,6 +233,21 @@ final class SpatieDataTypeResolver
         }
 
         return null;
+    }
+
+    /**
+     * A Data class that overrides toResponse() decides its own JSON shape, so
+     * laravel-data never gets the chance to wrap it.
+     */
+    private static function sendsOwnResponse(string $class): bool
+    {
+        if (! method_exists($class, 'toResponse')) {
+            return false;
+        }
+
+        $declaring = (new ReflectionMethod($class, 'toResponse'))->getDeclaringClass()->getName();
+
+        return ! str_starts_with($declaring, 'Spatie\\LaravelData\\');
     }
 
     /**

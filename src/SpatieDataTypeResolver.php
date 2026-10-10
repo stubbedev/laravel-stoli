@@ -4,13 +4,23 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli;
 
+use BackedEnum;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Route as LaravelRoute;
+use Illuminate\Support\Enumerable;
 use Illuminate\Support\Str;
+use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprFloatNode;
+use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprIntegerNode;
+use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprStringNode;
+use PHPStan\PhpDocParser\Ast\Type\ArrayShapeNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\ConstTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
 use PHPStan\PhpDocParser\Parser\ConstExprParser;
 use PHPStan\PhpDocParser\Parser\PhpDocParser;
@@ -20,107 +30,289 @@ use PHPStan\PhpDocParser\ParserConfig;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
+use ReflectionType;
+use ReflectionUnionType;
 use StubbeDev\LaravelStoli\Compilers\TypeScript;
 use StubbeDev\LaravelStoli\Items\DataType;
+use StubbeDev\LaravelStoli\Requests\RequestTypes;
 use Throwable;
 
-use function class_basename;
-
 /**
- * Resolves request and response TypeScript type references for controller actions
- * that use Spatie Laravel Data objects.
+ * Resolves the TypeScript types a controller action takes and responds with, from its
+ * signature and PHPDoc @return tag, using the types the typescript-transformer
+ * generated for Spatie Data classes (and any other class it transformed).
  *
- * When a controller method accepts a Data subclass as its request parameter, this
- * resolver looks up the corresponding TypeScript type in the typescript-transformer
- * types file. The same lookup is performed on the return type for the response,
- * including a generic argument from the PHPDoc @return tag.
+ * PHPDoc types are converted recursively: `ApiResponseData<list<UserData>|null>`,
+ * `array<string, UserData>` and `array{user: UserData, total?: int}` all come out as
+ * their TypeScript counterparts. A type with any part that cannot be converted is not
+ * guessed at: the whole type is left unresolved.
  *
- * Types found inside a `declare namespace` (the GlobalNamespaceWriter output) are
- * ambient globals, referenced by their dotted path (e.g.
- * `App.Http.Data.StoreUserRequestData`) with nothing to import. Types exported at
- * the top level of a module file are referenced by their bare name and imported.
- *
- * Routes that do not use Spatie Data objects return null for both.
+ * How a transformed class is referenced is up to TransformedTypes.
  */
 final class SpatieDataTypeResolver
 {
     /**
-     * Inner generic arguments that are not classes (e.g. ApiResponseData<null>)
-     * are rendered directly as TypeScript instead of being dropped.
+     * PHPDoc types that are not classes.
      */
-    private const TS_LITERAL_TYPES = [
+    private const SCALARS = [
         'null' => 'null',
+        'void' => 'void',
         'bool' => 'boolean',
         'boolean' => 'boolean',
         'true' => 'true',
         'false' => 'false',
         'int' => 'number',
         'integer' => 'number',
+        'positive-int' => 'number',
+        'negative-int' => 'number',
+        'non-negative-int' => 'number',
+        'non-positive-int' => 'number',
+        'non-zero-int' => 'number',
         'float' => 'number',
+        'double' => 'number',
+        'numeric' => 'number',
         'string' => 'string',
+        'non-empty-string' => 'string',
+        'non-falsy-string' => 'string',
+        'truthy-string' => 'string',
+        'numeric-string' => '`${number}`',
+        'lowercase-string' => 'string',
+        'class-string' => 'string',
+        'array-key' => 'string | number',
+        'scalar' => 'string | number | boolean',
         'mixed' => 'unknown',
+        'object' => 'Record<string, unknown>',
     ];
+
+    /**
+     * Array types that hold items, with whether they are always lists.
+     */
+    private const ARRAYS = [
+        'array' => false,
+        'non-empty-array' => false,
+        'iterable' => false,
+        'list' => true,
+        'non-empty-list' => true,
+    ];
+
+    /**
+     * Keys a collection is sent as a JSON array with.
+     */
+    private const LIST_KEYS = ['int', 'integer', 'positive-int', 'non-negative-int'];
 
     private const DATA_CLASSES = [
         'Spatie\\LaravelData\\Data',
         'Spatie\\LaravelData\\Resource',
     ];
 
-    /**
-     * Return types that are sent as a plain JSON array of their items.
-     */
-    private const LIST_TYPES = [
-        'array',
-        'iterable',
-        'Illuminate\\Support\\Enumerable',
-        self::DATA_COLLECTION,
-    ];
-
     private const DATA_COLLECTION = 'Spatie\\LaravelData\\DataCollection';
 
     /**
-     * Return types laravel-data sends wrapped in data/links/meta, by the stoli.d.ts
+     * Collections laravel-data sends wrapped in data/links/meta, by the route service
      * type describing that envelope.
      */
-    private const PAGINATED_TYPES = [
+    private const PAGINATED = [
         'Spatie\\LaravelData\\PaginatedDataCollection' => 'Paginated',
         'Spatie\\LaravelData\\CursorPaginatedDataCollection' => 'CursorPaginated',
     ];
 
-    /**
-     * Exported type path => whether it is ambient, read once from the types file.
-     *
-     * @var array<string, bool>|null
-     */
-    private ?array $exports = null;
-
     private readonly ClassNameResolver $classNames;
 
     public function __construct(
-        private readonly TransformerOutput $output,
+        private readonly TransformedTypes $transformed,
+        private readonly RequestTypes $requests,
         private readonly ?Repository $config = null,
     ) {
         $this->classNames = new ClassNameResolver;
     }
 
     /**
-     * @return array{request: ?DataType, response: ?DataType}
+     * What the action takes in: its first Data or FormRequest parameter, as a request
+     * takes it.
      */
-    public function resolve(LaravelRoute $route): array
+    public function request(LaravelRoute $route): ?DataType
     {
-        $method = self::actionMethod($route);
+        foreach (self::action($route)?->getParameters() ?? [] as $parameter) {
+            $type = $parameter->getType();
+            $class = $type instanceof ReflectionNamedType && ! $type->isBuiltin() ? $type->getName() : null;
 
-        if ($method === null) {
-            return ['request' => null, 'response' => null];
+            if ($class !== null && self::isData($class)) {
+                return $this->requests->data($class);
+            }
+
+            if ($class !== null && RequestTypes::isFormRequest($class)) {
+                return $this->requests->formRequest($class);
+            }
         }
 
-        return [
-            'request' => $this->resolveRequestType($method),
-            'response' => $this->resolveResponseType($method),
-        ];
+        return null;
     }
 
-    private static function actionMethod(LaravelRoute $route): ?ReflectionMethod
+    /**
+     * The types the action's signature gives its route parameters: a backed enum takes
+     * its values, an int or float a number, a string a string, and a model the type of
+     * the key it is bound by. Laravel binds a route parameter to the action parameter
+     * of the same name.
+     *
+     * @return array<string, string> route parameter => TypeScript type
+     */
+    public function parameters(LaravelRoute $route): array
+    {
+        $types = [];
+
+        foreach (self::action($route)?->getParameters() ?? [] as $parameter) {
+            $type = $parameter->getType();
+
+            if (! $type instanceof ReflectionNamedType) {
+                continue;
+            }
+
+            $name = $type->getName();
+            $mapped = match (true) {
+                $name === 'int', $name === 'float' => 'number',
+                $name === 'string' => 'string',
+                is_subclass_of($name, BackedEnum::class) => self::enumValues($name),
+                is_subclass_of($name, Model::class) => self::modelKey($name, $route->bindingFieldFor($parameter->getName())),
+                default => null,
+            };
+
+            if ($mapped !== null) {
+                $types[$parameter->getName()] = $mapped;
+            }
+        }
+
+        return $types;
+    }
+
+    /**
+     * The type of the key a model is bound by: its integer primary key is a number, any
+     * other key, such as a slug, text.
+     *
+     * @param  class-string<Model>  $model
+     */
+    private static function modelKey(string $model, ?string $field): ?string
+    {
+        try {
+            $instance = (new ReflectionClass($model))->newInstanceWithoutConstructor();
+            $key = $field ?? $instance->getRouteKeyName();
+        } catch (Throwable) {
+            return null;
+        }
+
+        return $key === $instance->getKeyName() && in_array($instance->getKeyType(), ['int', 'integer'], true) ? 'number' : 'string';
+    }
+
+    /**
+     * The values of a backed enum, an integer one also as the text a URL carries it as.
+     *
+     * @param  class-string<BackedEnum>  $enum
+     */
+    private static function enumValues(string $enum): ?string
+    {
+        $values = [];
+
+        foreach ($enum::cases() as $case) {
+            $values[] = TypeScript::string((string) $case->value);
+
+            if (is_int($case->value)) {
+                $values[] = (string) $case->value;
+            }
+        }
+
+        return $values === [] ? null : TypeScript::union($values);
+    }
+
+    /**
+     * What the action responds with: its @return tag, or its return type without one.
+     *
+     * laravel-data wraps what a controller returns the way the response does: a Data
+     * object under its defaultWrap() key or the `data.wrap` config key, a DataCollection
+     * under the config key, and a paginated one renames its `data` key to it. A plain
+     * array or Collection is serialized by Laravel and never wrapped.
+     */
+    public function response(LaravelRoute $route): ?DataType
+    {
+        $returned = $this->returned($route);
+
+        if ($returned === null) {
+            return null;
+        }
+
+        [$type, $class] = $returned;
+
+        $wrap = match (true) {
+            $class === null => null,
+            self::isData($class) => self::sendsOwnResponse($class) ? null : self::classWrap($class) ?? $this->globalWrap(),
+            is_a($class, self::DATA_COLLECTION, true) => $this->globalWrap(),
+            default => null,
+        };
+
+        return $wrap === null ? $type : $type->wrapped($wrap);
+    }
+
+    /**
+     * The status the action responds with when it succeeds: laravel-data sends a Data
+     * object or collection with 201 to a POST and 200 otherwise, and Laravel sends
+     * anything else it serializes itself with 200. A response the action builds itself
+     * can have any status.
+     *
+     * @param  list<string>  $methods  the HTTP methods the route answers to, lowercase
+     */
+    public function status(LaravelRoute $route, array $methods): string
+    {
+        $returned = $this->returned($route);
+
+        if ($returned === null) {
+            return 'number';
+        }
+
+        [, $class] = $returned;
+
+        if ($class === null || (! self::isData($class) && ! is_a($class, self::DATA_COLLECTION, true) && ! isset(self::PAGINATED[$class]))) {
+            return $class === null || is_a($class, Enumerable::class, true) ? '200' : 'number';
+        }
+
+        if (self::isData($class) && self::sendsOwnResponse($class)) {
+            return 'number';
+        }
+
+        $statuses = array_unique(array_map(static fn (string $method): string => $method === 'post' ? '201' : '200', $methods));
+        sort($statuses);
+
+        return $statuses === [] ? '200' : implode(' | ', $statuses);
+    }
+
+    /**
+     * The type the action returns, and the class that is returned, which decides how it
+     * is sent whatever the @return tag says it holds; null for an array or scalar.
+     *
+     * @return array{DataType, string|null}|null
+     */
+    private function returned(LaravelRoute $route): ?array
+    {
+        $method = self::action($route);
+        $native = $method?->getReturnType();
+        $node = $method === null ? null : (self::returnTag($method) ?? self::node($native));
+
+        if ($method === null || $node === null) {
+            return null;
+        }
+
+        $context = $method->getDeclaringClass();
+        $type = $this->type($node, $context);
+
+        if ($type === null) {
+            return null;
+        }
+
+        $class = $native instanceof ReflectionNamedType && ! $native->isBuiltin()
+            ? $native->getName()
+            : $this->outerClass($node, $context);
+
+        return [$type, $class];
+    }
+
+    private static function action(LaravelRoute $route): ?ReflectionMethod
     {
         $action = $route->getAction('uses');
 
@@ -129,110 +321,226 @@ final class SpatieDataTypeResolver
         }
 
         $controller = Str::before($action, '@');
-        $method = str_contains($action, '@') ? Str::after($action, '@') : '__invoke';
 
         if (! class_exists($controller)) {
             return null;
         }
 
         try {
-            return new ReflectionMethod($controller, $method);
+            return new ReflectionMethod($controller, str_contains($action, '@') ? Str::after($action, '@') : '__invoke');
         } catch (Throwable) {
             return null;
         }
     }
 
     /**
-     * The first Spatie Data parameter of the method.
+     * A native type as the PHPDoc type it is the same as.
      */
-    private function resolveRequestType(ReflectionMethod $method): ?DataType
+    private static function node(?ReflectionType $type): ?TypeNode
     {
-        foreach ($method->getParameters() as $parameter) {
-            $type = $parameter->getType();
+        if ($type instanceof ReflectionUnionType) {
+            $members = array_map(self::node(...), $type->getTypes());
 
-            if ($type instanceof ReflectionNamedType && ! $type->isBuiltin() && self::isDataClass($type->getName())) {
-                return $this->lookup($type->getName());
-            }
+            return in_array(null, $members, true) ? null : new UnionTypeNode(array_values($members));
         }
 
-        return null;
+        if (! $type instanceof ReflectionNamedType) {
+            return null;
+        }
+
+        $node = new IdentifierTypeNode($type->isBuiltin() ? $type->getName() : '\\'.$type->getName());
+
+        return $type->allowsNull() && ! in_array($type->getName(), ['null', 'mixed'], true)
+            ? new NullableTypeNode($node)
+            : $node;
     }
 
     /**
-     * The type the method responds with, from its return type and PHPDoc @return tag:
+     * The TypeScript type of a PHPDoc type written in $context.
      *
-     *  - a Data class, with a generic argument when the tag gives it one:
-     *    `@return ApiResponseData<UserData>` becomes ApiResponseData<UserData>;
-     *  - an array, Collection or DataCollection of Data, as an array of it:
-     *    `@return DataCollection<int, UserData>` becomes UserData[];
-     *  - a paginated DataCollection of Data, in the envelope laravel-data sends:
-     *    `@return PaginatedDataCollection<int, UserData>` becomes Paginated<UserData>.
-     *
-     * laravel-data wraps what a controller returns the way the response does: a Data
-     * object under its defaultWrap() key or the `data.wrap` config key, a DataCollection
-     * under the config key, and a paginated one renames its `data` key to it. A plain
-     * array or Collection is serialized by Laravel and never wrapped.
+     * @param  ReflectionClass<object>  $context
      */
-    private function resolveResponseType(ReflectionMethod $method): ?DataType
+    private function type(TypeNode $node, ReflectionClass $context): ?DataType
     {
-        $returnType = $method->getReturnType();
+        return match (true) {
+            $node instanceof IdentifierTypeNode => $this->named($node->name, [], $context),
+            $node instanceof GenericTypeNode => $this->named($node->type->name, array_values($node->genericTypes), $context),
+            $node instanceof NullableTypeNode => $this->union([$node->type, new IdentifierTypeNode('null')], $context),
+            $node instanceof UnionTypeNode => $this->union(array_values($node->types), $context),
+            $node instanceof ArrayTypeNode => $this->type($node->type, $context)?->list(),
+            $node instanceof ArrayShapeNode => $this->shape($node, $context),
+            $node instanceof ConstTypeNode => self::constant($node),
+            default => null,
+        };
+    }
 
-        if (! $returnType instanceof ReflectionNamedType) {
-            return null;
-        }
+    /**
+     * @param  list<TypeNode>  $nodes
+     * @param  ReflectionClass<object>  $context
+     */
+    private function union(array $nodes, ReflectionClass $context): ?DataType
+    {
+        $types = $this->types($nodes, $context);
 
-        $class = $returnType->getName();
-        $tag = $this->returnTag($method);
+        return $types === null || $types === [] ? null : DataType::union(...$types);
+    }
 
-        if (self::isDataClass($class)) {
-            $resolved = $this->lookup($class);
-            $argument = $tag instanceof GenericTypeNode && count($tag->genericTypes) === 1
-                ? $this->argumentType($tag->genericTypes[0], $method)
-                : null;
+    /**
+     * Every one of the types, or null when any of them cannot be converted.
+     *
+     * @param  list<TypeNode>  $nodes
+     * @param  ReflectionClass<object>  $context
+     * @return list<DataType>|null
+     */
+    private function types(array $nodes, ReflectionClass $context): ?array
+    {
+        $types = [];
 
-            $resolved = $argument === null ? $resolved : $resolved?->withArgument($argument);
-            if (self::sendsOwnResponse($class)) {
-                return $resolved;
-            }
+        foreach ($nodes as $node) {
+            $type = $this->type($node, $context);
 
-            $wrap = self::classWrap($class) ?? $this->globalWrap();
-
-            return $wrap === null ? $resolved : $resolved?->wrapped($wrap);
-        }
-
-        $item = $this->itemType($tag, $method);
-
-        if ($item === null) {
-            return null;
-        }
-
-        $envelope = self::PAGINATED_TYPES[$class] ?? null;
-
-        if ($envelope !== null) {
-            // The envelope types ship in stoli.d.ts, next to the route service.
-            $directory = $this->output->directory;
-
-            if ($directory === null) {
+            if ($type === null) {
                 return null;
             }
 
-            $envelopeType = DataType::imported($envelope, Utils::absolutePath($directory.'/stoli.d.ts'));
-            $wrap = $this->globalWrap();
-
-            return $wrap === null || $wrap === 'data'
-                ? $envelopeType->withArgument($item)
-                : $envelopeType->withArgument($item, TypeScript::string($wrap));
+            $types[] = $type;
         }
 
-        foreach (self::LIST_TYPES as $listType) {
-            if ($class === $listType || is_a($class, $listType, true)) {
-                $wrap = is_a($class, self::DATA_COLLECTION, true) ? $this->globalWrap() : null;
+        return $types;
+    }
 
-                return $wrap === null ? $item->list() : $item->list()->wrapped($wrap);
+    /**
+     * @param  list<TypeNode>  $arguments
+     * @param  ReflectionClass<object>  $context
+     */
+    private function named(string $name, array $arguments, ReflectionClass $context): ?DataType
+    {
+        $lower = strtolower($name);
+
+        if (isset(self::SCALARS[$lower])) {
+            return $arguments === [] ? new DataType(self::SCALARS[$lower]) : null;
+        }
+
+        if (isset(self::ARRAYS[$lower])) {
+            return $this->collection($arguments, self::ARRAYS[$lower], $context);
+        }
+
+        $class = $this->resolveClass($name, $context);
+
+        if ($class === null) {
+            return null;
+        }
+
+        if (isset(self::PAGINATED[$class])) {
+            $item = $arguments === [] ? null : $this->type($arguments[array_key_last($arguments)], $context);
+            $envelope = DataType::runtime(self::PAGINATED[$class]);
+            $wrap = $this->globalWrap();
+
+            return $item === null ? null : $envelope->withArguments(
+                $item,
+                ...($wrap === null || $wrap === 'data' ? [] : [new DataType(TypeScript::string($wrap))]),
+            );
+        }
+
+        if (is_a($class, Enumerable::class, true) || is_a($class, self::DATA_COLLECTION, true)) {
+            return $this->collection($arguments, false, $context);
+        }
+
+        $arguments = $this->types($arguments, $context);
+
+        return $arguments === null ? null : $this->transformed->find($class, $arguments);
+    }
+
+    /**
+     * A collection as it is sent: a JSON array, or an object when it is keyed by strings.
+     * Without an item type there is nothing to say about it.
+     *
+     * @param  list<TypeNode>  $arguments  the value type, or the key and value types
+     * @param  ReflectionClass<object>  $context
+     */
+    private function collection(array $arguments, bool $list, ReflectionClass $context): ?DataType
+    {
+        $value = $arguments === [] ? null : $this->type($arguments[array_key_last($arguments)], $context);
+
+        if ($value === null) {
+            return null;
+        }
+
+        $key = count($arguments) > 1 ? $arguments[0] : null;
+
+        return $list || $key === null || ($key instanceof IdentifierTypeNode && in_array(strtolower($key->name), self::LIST_KEYS, true))
+            ? $value->list()
+            : $value->record();
+    }
+
+    /**
+     * @param  ReflectionClass<object>  $context
+     */
+    private function shape(ArrayShapeNode $node, ReflectionClass $context): ?DataType
+    {
+        $properties = [];
+        $optional = [];
+
+        foreach ($node->items as $item) {
+            $key = match (true) {
+                $item->keyName instanceof IdentifierTypeNode => $item->keyName->name,
+                $item->keyName instanceof ConstExprStringNode => $item->keyName->value,
+                $item->keyName instanceof ConstExprIntegerNode => $item->keyName->value,
+                default => null,
+            };
+            $type = $this->type($item->valueType, $context);
+
+            // An unnamed item makes it a list shape, which is not converted.
+            if ($key === null || $type === null) {
+                return null;
+            }
+
+            $properties[$key] = $type;
+
+            if ($item->optional) {
+                $optional[] = $key;
             }
         }
 
-        return null;
+        return DataType::object($properties, $optional);
+    }
+
+    private static function constant(ConstTypeNode $node): ?DataType
+    {
+        $value = $node->constExpr;
+
+        return match (true) {
+            $value instanceof ConstExprStringNode => new DataType(TypeScript::string($value->value)),
+            $value instanceof ConstExprIntegerNode, $value instanceof ConstExprFloatNode => new DataType(str_replace('_', '', $value->value)),
+            default => null,
+        };
+    }
+
+    /**
+     * The class the outermost part of a PHPDoc type names.
+     *
+     * @param  ReflectionClass<object>  $context
+     */
+    private function outerClass(TypeNode $node, ReflectionClass $context): ?string
+    {
+        $name = match (true) {
+            $node instanceof IdentifierTypeNode => $node->name,
+            $node instanceof GenericTypeNode => $node->type->name,
+            default => null,
+        };
+
+        return $name === null ? null : $this->resolveClass($name, $context);
+    }
+
+    /**
+     * @param  ReflectionClass<object>  $context
+     * @return class-string|null
+     */
+    private function resolveClass(string $name, ReflectionClass $context): ?string
+    {
+        return in_array(strtolower($name), ['self', 'static', '$this'], true)
+            ? $context->getName()
+            : $this->classNames->resolve($name, $context);
     }
 
     /**
@@ -282,48 +590,9 @@ final class SpatieDataTypeResolver
     }
 
     /**
-     * A generic argument: a transformed class, or a non-class type from self::TS_LITERAL_TYPES
-     * (the "null" in "@return ApiResponseData<null>").
-     */
-    private function argumentType(TypeNode $node, ReflectionMethod $method): DataType|string|null
-    {
-        if (! $node instanceof IdentifierTypeNode) {
-            return null;
-        }
-
-        return self::TS_LITERAL_TYPES[strtolower($node->name)] ?? $this->classType($node->name, $method);
-    }
-
-    /**
-     * The Data class a collection holds: the last generic argument of
-     * `Collection<int, UserData>`, or the item of `UserData[]`.
-     */
-    private function itemType(?TypeNode $tag, ReflectionMethod $method): ?DataType
-    {
-        $item = match (true) {
-            $tag instanceof GenericTypeNode => array_values($tag->genericTypes)[count($tag->genericTypes) - 1] ?? null,
-            $tag instanceof ArrayTypeNode => $tag->type,
-            default => null,
-        };
-
-        return $item instanceof IdentifierTypeNode ? $this->classType($item->name, $method) : null;
-    }
-
-    /**
-     * The type the transformer generated for a class named in a PHPDoc tag. Any class
-     * it transformed will do, so an enum argument (ApiResponseData<Status>) works too.
-     */
-    private function classType(string $name, ReflectionMethod $method): ?DataType
-    {
-        $class = $this->classNames->resolve($name, $method->getDeclaringClass());
-
-        return $class === null ? null : $this->lookup($class);
-    }
-
-    /**
      * The type of the method's PHPDoc @return tag.
      */
-    private function returnTag(ReflectionMethod $method): ?TypeNode
+    private static function returnTag(ReflectionMethod $method): ?TypeNode
     {
         $docComment = $method->getDocComment();
 
@@ -340,114 +609,17 @@ final class SpatieDataTypeResolver
             return null;
         }
 
-        foreach ($phpDoc->getReturnTagValues() as $returnTag) {
-            return $returnTag->type;
-        }
-
-        return null;
+        return ($phpDoc->getReturnTagValues()[0] ?? null)?->type;
     }
 
-    private static function isDataClass(string $className): bool
+    private static function isData(string $class): bool
     {
-        if (! class_exists($className)) {
-            return false;
-        }
-
         foreach (self::DATA_CLASSES as $base) {
-            if (is_a($className, $base, true)) {
+            if (is_a($class, $base, true)) {
                 return true;
             }
         }
 
         return false;
-    }
-
-    /**
-     * Find the type the transformer generated for a PHP class: at its namespace path
-     * when it is ambient, or by its bare name when it is a module export.
-     */
-    private function lookup(string $class): ?DataType
-    {
-        $file = $this->output->typesFile;
-        $exports = $this->exports();
-
-        if ($file === null || $exports === []) {
-            return null;
-        }
-
-        $file = realpath($file) ?: $file;
-        $dotted = str_replace('\\', '.', ltrim($class, '\\'));
-
-        if ($exports[$dotted] ?? false) {
-            return new DataType($dotted);
-        }
-
-        $baseName = class_basename($class);
-
-        if (! isset($exports[$baseName])) {
-            return null;
-        }
-
-        return $exports[$baseName]
-            ? new DataType($baseName)
-            : DataType::imported($baseName, $file);
-    }
-
-    /**
-     * @return array<string, bool>
-     */
-    private function exports(): array
-    {
-        if ($this->exports !== null) {
-            return $this->exports;
-        }
-
-        $file = $this->output->typesFile;
-        $source = $file !== null && is_file($file) ? @file_get_contents($file) : false;
-
-        return $this->exports = $source === false ? [] : self::parseExports($source);
-    }
-
-    /**
-     * Every exported type and interface in a types file, keyed by its dotted path
-     * through the enclosing namespaces. Braces are tracked to know which namespace
-     * a declaration sits in; a type inside `declare namespace` or `declare global`
-     * is ambient.
-     *
-     * @return array<string, bool>
-     */
-    private static function parseExports(string $source): array
-    {
-        preg_match_all(
-            '/(?<declare>\bdeclare\s+)?(?:\bnamespace\s+(?<namespace>[\w$.]+)\s*\{|\bglobal\s*\{)'
-            .'|\bexport\s+(?:declare\s+)?(?:type|interface)\s+(?<type>[A-Za-z_$][\w$]*)'
-            .'|(?<brace>[{}])/',
-            $source,
-            $tokens,
-            PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL,
-        );
-
-        $stack = [];
-        $exports = [];
-
-        foreach ($tokens as $token) {
-            $ambient = $stack !== [] && $stack[array_key_last($stack)]['ambient'];
-
-            if ($token['type'] !== null) {
-                $path = [...array_merge(...array_column($stack, 'names')), $token['type']];
-                $exports[implode('.', $path)] ??= $ambient;
-            } elseif ($token['brace'] === '}') {
-                array_pop($stack);
-            } elseif ($token['brace'] === '{') {
-                $stack[] = ['names' => [], 'ambient' => $ambient];
-            } else {
-                $stack[] = [
-                    'names' => $token['namespace'] === null ? [] : explode('.', $token['namespace']),
-                    'ambient' => $ambient || $token['declare'] !== null || $token['namespace'] === null,
-                ];
-            }
-        }
-
-        return $exports;
     }
 }

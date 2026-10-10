@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli;
 
 use Illuminate\Filesystem\Filesystem;
+use StubbeDev\LaravelStoli\Generation\GeneratedFile;
+use StubbeDev\LaravelStoli\Generation\Generation;
+use StubbeDev\LaravelStoli\Generation\Removal;
 use Throwable;
 
 /**
- * Writes a generated file unless it already holds what the same content produced on
- * the last run, so an unchanged file keeps its mtime and does not wake file watchers.
+ * Writes generated files, and removes the ones an earlier run generated. A file is not rewritten when it already holds what the same content produced on the
+ * last run, so an unchanged file keeps its mtime and does not wake file watchers.
  *
  * Inside batch(), formatting is deferred: the formatter is started once for every
  * file written in the batch rather than once per file, which matters for a formatter
@@ -30,12 +33,10 @@ final class GeneratedFileWriter
         private readonly TransformerOutput $output,
     ) {}
 
-    /**
-     * @param  bool  $format  run the typescript-transformer formatter over the written file
-     */
-    public function write(string $path, string $content, bool $format = true): void
+    public function write(GeneratedFile $file): void
     {
-        $path = Utils::absolutePath($path);
+        $path = $file->path;
+        $content = $file->contents;
 
         if ($this->hashCache->isUnchanged($path, $content)) {
             return;
@@ -44,7 +45,7 @@ final class GeneratedFileWriter
         $this->filesystem->ensureDirectoryExists(dirname($path));
         $this->filesystem->put($path, $content);
 
-        if (! $format || $this->output->formatter === null) {
+        if (! $file->format || $this->output->formatter === null) {
             $this->hashCache->record($path, $content);
 
             return;
@@ -57,6 +58,76 @@ final class GeneratedFileWriter
         }
 
         $this->format([$path => $content]);
+    }
+
+    /**
+     * Remove a file an earlier run generated and this one does not. A file Stoli did not
+     * generate is left alone.
+     */
+    public function remove(Removal $removal): void
+    {
+        if ($this->removable($removal)) {
+            $this->filesystem->delete($removal->path);
+        }
+    }
+
+    /**
+     * The paths that do not hold what writing $generation would leave there: files that
+     * are missing or differ, and files it would remove.
+     *
+     * A file that is formatted is compared with what the formatter makes of it, which is
+     * found by formatting a copy next to it, so the formatter picks up the same config.
+     *
+     * @return list<string>
+     */
+    public function stale(Generation $generation): array
+    {
+        $stale = [];
+        $copies = [];
+
+        foreach ($generation->files as $file) {
+            if (! $this->filesystem->isFile($file->path)) {
+                $stale[] = $file->path;
+            } elseif ($file->format && $this->output->formatter !== null) {
+                $copy = dirname($file->path).'/.stoli-check.'.basename($file->path);
+                $this->filesystem->put($copy, $file->contents);
+                $copies[$copy] = $file->path;
+            } elseif ($this->filesystem->get($file->path) !== $file->contents) {
+                $stale[] = $file->path;
+            }
+        }
+
+        try {
+            if ($copies !== []) {
+                $this->output->formatter?->format(array_keys($copies));
+            }
+
+            foreach ($copies as $copy => $path) {
+                if ($this->filesystem->get($copy) !== $this->filesystem->get($path)) {
+                    $stale[] = $path;
+                }
+            }
+        } catch (Throwable $error) {
+            throw StoliException::cantFormat($error);
+        } finally {
+            $this->filesystem->delete(array_keys($copies));
+        }
+
+        foreach ($generation->removals as $removal) {
+            if ($this->removable($removal)) {
+                $stale[] = $removal->path;
+            }
+        }
+
+        sort($stale);
+
+        return $stale;
+    }
+
+    private function removable(Removal $removal): bool
+    {
+        return $this->filesystem->isFile($removal->path)
+            && GeneratedFile::isGenerated($this->filesystem->get($removal->path), $removal->legacy);
     }
 
     /**

@@ -7,7 +7,7 @@ namespace StubbeDev\LaravelStoli\Tests\Fixtures\TypeScript\Data;
 use Spatie\LaravelData\Data;
 
 /**
- * @template TData
+ * @template TData = mixed
  */
 final class ApiResponseData extends Data
 {

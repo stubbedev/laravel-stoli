@@ -5,9 +5,22 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli\Tests;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Routing\Router;
 use Orchestra\Testbench\TestCase as BaseTestCase;
+use Spatie\LaravelData\LaravelDataServiceProvider;
+use Spatie\LaravelTypeScriptTransformer\LaravelData\LaravelDataTypeScriptTransformerExtension;
+use Spatie\TypeScriptTransformer\Transformers\EnumTransformer;
+use Spatie\TypeScriptTransformer\TypeScriptTransformer;
+use Spatie\TypeScriptTransformer\TypeScriptTransformerConfig;
+use Spatie\TypeScriptTransformer\TypeScriptTransformerConfigFactory;
+use Spatie\TypeScriptTransformer\Writers\GlobalNamespaceWriter;
+use Spatie\TypeScriptTransformer\Writers\Writer;
+use StubbeDev\LaravelStoli\GeneratedFileWriter;
+use StubbeDev\LaravelStoli\Generation\Generation;
+use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\StoliServiceProvider;
+use StubbeDev\LaravelStoli\TransformedTypes;
 use StubbeDev\LaravelStoli\TransformerOutput;
 
 use function app;
@@ -32,6 +45,7 @@ abstract class TestCase extends BaseTestCase
     protected function getPackageProviders($app): array
     {
         return [
+            LaravelDataServiceProvider::class,
             StoliServiceProvider::class,
         ];
     }
@@ -88,14 +102,68 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Bind a stand-in for the typescript-transformer config. TransformerOutput reads
-     * it by its public properties, so the output directory is all it has to carry.
+     * The directory holding the classes the transformer transforms in the tests.
      */
-    protected static function useTransformerOutputDirectory(string $directory): void
+    protected const TRANSFORMED = __DIR__.'/Fixtures/TypeScript';
+
+    /**
+     * Bind a typescript-transformer config writing to $directory, set up the way an
+     * application would: laravel-data classes and enums from the fixtures.
+     *
+     * @param  list<string>  $directories  the directories transformed
+     */
+    protected static function useTransformer(string $directory, ?Writer $writer = null, array $directories = [self::TRANSFORMED]): TypeScriptTransformerConfig
     {
-        app()->instance(TransformerOutput::BINDING, new class($directory)
-        {
-            public function __construct(public string $outputDirectory) {}
-        });
+        (new Filesystem)->ensureDirectoryExists($directory);
+
+        $config = (new TypeScriptTransformerConfigFactory)
+            ->extension(new LaravelDataTypeScriptTransformerExtension)
+            ->transformer(EnumTransformer::class)
+            ->transformDirectories(...$directories)
+            ->outputDirectory($directory)
+            ->writer($writer ?? new GlobalNamespaceWriter('index.d.ts'))
+            ->withoutManifest()
+            ->get();
+
+        // Bound the way an application binds it, so Stoli's container extension applies.
+        app()->forgetInstance(TypeScriptTransformerConfig::class);
+        app()->singleton(TypeScriptTransformerConfig::class, static fn (): TypeScriptTransformerConfig => $config);
+        self::forgetResolved();
+
+        return app()->make(TypeScriptTransformerConfig::class);
+    }
+
+    /**
+     * Drop the services built from the config, so the next ones read it anew.
+     */
+    protected static function forgetResolved(): void
+    {
+        foreach ([TransformerOutput::class, TransformedTypes::class, StoliConfig::class, GeneratedFileWriter::class] as $service) {
+            app()->forgetInstance($service);
+        }
+    }
+
+    /**
+     * Write $generation the way the Publisher does.
+     */
+    protected static function apply(Generation $generation): void
+    {
+        $writer = app()->make(GeneratedFileWriter::class);
+
+        foreach ($generation->files as $file) {
+            $writer->write($file);
+        }
+
+        foreach ($generation->removals as $removal) {
+            $writer->remove($removal);
+        }
+    }
+
+    /**
+     * Run the transformer bound by useTransformer(), the way `typescript:transform` does.
+     */
+    protected static function transform(): void
+    {
+        TypeScriptTransformer::create(app()->make(TypeScriptTransformerConfig::class))->execute();
     }
 }

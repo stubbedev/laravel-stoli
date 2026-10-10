@@ -33,7 +33,7 @@ final class ConstantGroupBuilderTest extends TestCase
         $groups = [];
 
         foreach ($builder->groups() as $group) {
-            $groups[$group->className()] = $group;
+            $groups[$group->className] = $group;
         }
 
         return $groups;
@@ -61,7 +61,7 @@ final class ConstantGroupBuilderTest extends TestCase
 
         $this->assertSame(
             ['VIEW' => 'view', 'EDIT' => 'edit', 'LEVELS' => ['low' => 1, 'high' => 2]],
-            $group->constants()
+            $group->constants
         );
     }
 
@@ -69,7 +69,7 @@ final class ConstantGroupBuilderTest extends TestCase
     {
         $group = $this->discover()[\StubbeDev\LaravelStoli\Tests\Fixtures\Constants\Permission::class];
 
-        $this->assertSame(['StubbeDev', 'LaravelStoli', 'Tests', 'Fixtures', 'Constants'], $group->namespace());
+        $this->assertSame(['StubbeDev', 'LaravelStoli', 'Tests', 'Fixtures', 'Constants'], $group->namespace);
         $this->assertSame('StubbeDev.LaravelStoli.Tests.Fixtures.Constants.Permission', $group->path());
     }
 
@@ -77,7 +77,7 @@ final class ConstantGroupBuilderTest extends TestCase
     {
         $group = $this->discover()[\StubbeDev\LaravelStoli\Tests\Fixtures\Constants\Limits::class];
 
-        $this->assertSame('Boundaries', $group->name());
+        $this->assertSame('Boundaries', $group->name);
     }
 
     public function test_nothing_is_discovered_without_a_directory_to_scan(): void

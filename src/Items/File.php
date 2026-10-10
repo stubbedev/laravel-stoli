@@ -4,48 +4,29 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli\Items;
 
-use Illuminate\Support\Collection;
+use function Illuminate\Filesystem\join_paths;
 
+/**
+ * One generated route file.
+ */
 final readonly class File
 {
     /**
-     * @param  Collection<int, Route>  $routes
+     * @param  string  $directory  where the file is written
+     * @param  string  $runtime  the directory holding the route service the file imports
+     * @param  list<Route>  $routes  unique by name
+     * @param  bool  $standalone  gets no axios router
      */
     public function __construct(
-        private string $name,
-        private ?string $path,
-        private Collection $routes,
-        private bool $standalone = false,
+        public string $name,
+        public string $directory,
+        public string $runtime,
+        public array $routes,
+        public bool $standalone = false,
     ) {}
 
-    /**
-     * @param  Collection<int, Route>  $routes
-     */
-    public static function from(Module $module, Collection $routes): self
+    public function path(): string
     {
-        return new self($module->name(), $module->path(), $routes, $module->standalone());
-    }
-
-    public function name(): string
-    {
-        return $this->name;
-    }
-
-    public function path(): ?string
-    {
-        return $this->path;
-    }
-
-    /**
-     * @return Collection<int, Route>
-     */
-    public function routes(): Collection
-    {
-        return $this->routes;
-    }
-
-    public function standalone(): bool
-    {
-        return $this->standalone;
+        return join_paths($this->directory, "{$this->name}.ts");
     }
 }

@@ -38,7 +38,7 @@ composer composer_args='install' docker_flags='':
 # Refresh composer dependencies before running the tests.
 deps: composer-install
 
-# Run phpunit inside the built image and check the published stub with node.
+# Run phpunit inside the built image and check the runtime modules with node.
 # Depends on build: the image holds the sources, so it has to exist and be current.
 # The TypeScript check needs its own node dependencies, installed first; it runs as the
 # host user so they are not left owned by root.
@@ -51,9 +51,19 @@ test: build test-js
 analyse: build
     docker run --rm -v {{current_dir}}:/app -w /app {{image}} vendor/bin/phpstan analyse --memory-limit=1G
 
-# The published stub is plain JS, so it is checked with node instead of phpunit.
+# The runtime modules are checked with node: transpiled from resources/ by the TypeScript
+# compiler the type check installs.
 test-js:
-    node {{current_dir}}/tests/routeservice.test.mjs
+    npm ci --prefix {{current_dir}}/tests/typescript --no-audit --no-fund --silent
+    node {{current_dir}}/tests/runtime.test.mjs
+
+# Run every end-to-end scenario in a real Laravel application, see e2e/run.sh.
+# Pick the versions, e.g. `just e2e 8.2 12 20 5.8`; `only` runs one scenario by index.
+e2e php='8.4' laravel='12' node='22' typescript='latest' only='':
+    docker build -f e2e/Dockerfile -t stoli-e2e:{{php}}-{{laravel}}-{{node}}-{{typescript}} \
+        --build-arg PHP_VERSION={{php}} --build-arg LARAVEL_VERSION={{laravel}} \
+        --build-arg NODE_VERSION={{node}} --build-arg TYPESCRIPT_VERSION={{typescript}} {{current_dir}}
+    docker run --rm {{ if only != '' { '-e E2E_ONLY=' + only } else { '' } }} stoli-e2e:{{php}}-{{laravel}}-{{node}}-{{typescript}}
 
 # Show the next major/minor/patch versions.
 release-preview:
@@ -94,6 +104,7 @@ release level:
     echo "releasing $v -> v$new"
     just test
     just analyse
+    just e2e
     git tag "v$new"
     git push origin HEAD
     git push origin "v$new"

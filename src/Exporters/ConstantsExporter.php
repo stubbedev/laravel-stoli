@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli\Exporters;
 
-use Illuminate\Filesystem\Filesystem;
 use StubbeDev\LaravelStoli\Compilers\ConstantsFileCompiler;
 use StubbeDev\LaravelStoli\ConstantGroupBuilder;
-use StubbeDev\LaravelStoli\GeneratedFileWriter;
+use StubbeDev\LaravelStoli\Generation\GeneratedFile;
+use StubbeDev\LaravelStoli\Generation\Generation;
+use StubbeDev\LaravelStoli\Generation\Removal;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\StoliException;
 use Throwable;
@@ -24,48 +25,27 @@ final readonly class ConstantsExporter
         private StoliConfig $config,
         private ConstantGroupBuilder $builder,
         private ConstantsFileCompiler $compiler,
-        private GeneratedFileWriter $writer,
-        private Filesystem $filesystem,
     ) {}
 
-    public function publish(): void
+    public function generate(): Generation
     {
-        if (! $this->config->constants()) {
-            return;
-        }
-
         $path = $this->config->constantsPath();
 
-        if ($path === null) {
-            return;
+        if (! $this->config->constants() || $path === null) {
+            return new Generation;
         }
 
         $file = join_paths($path, "{$this->config->constantsFileName()}.ts");
 
         try {
             $content = $this->compiler->compile($this->builder->groups());
-
-            if ($content === '') {
-                $this->removeGenerated($file);
-
-                return;
-            }
-
-            $this->writer->write($file, $content);
         } catch (Throwable $error) {
             throw StoliException::cantExportConstants($error);
         }
-    }
 
-    /**
-     * With no constants left to export, a file an earlier run generated is stale. One
-     * without the generated header was not written by Stoli and is left alone.
-     */
-    private function removeGenerated(string $file): void
-    {
-        if ($this->filesystem->exists($file)
-            && str_starts_with($this->filesystem->get($file), ConstantsFileCompiler::HEADER)) {
-            $this->filesystem->delete($file);
-        }
+        // With no constants left to export, a file an earlier run generated is stale.
+        return $content === ''
+            ? new Generation(removals: [new Removal($file)])
+            : new Generation([new GeneratedFile($file, $content)]);
     }
 }

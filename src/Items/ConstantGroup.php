@@ -16,37 +16,11 @@ final readonly class ConstantGroup
      * @param  array<string, mixed>  $constants
      */
     public function __construct(
-        private string $className,
-        private array $namespace,
-        private string $name,
-        private array $constants,
+        public string $className,
+        public array $namespace,
+        public string $name,
+        public array $constants,
     ) {}
-
-    public function className(): string
-    {
-        return $this->className;
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function namespace(): array
-    {
-        return $this->namespace;
-    }
-
-    public function name(): string
-    {
-        return $this->name;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function constants(): array
-    {
-        return $this->constants;
-    }
 
     /**
      * The dotted path the constants are reachable at in the generated file,
@@ -58,10 +32,10 @@ final readonly class ConstantGroup
     }
 
     /**
-     * @return list<string>
+     * @param  array<string, mixed>  $constants
      */
-    public function segments(): array
+    public function with(array $constants): self
     {
-        return [...$this->namespace, $this->name];
+        return new self($this->className, $this->namespace, $this->name, $constants);
     }
 }

@@ -29,20 +29,20 @@ final class ModulesProviderTest extends TestCase
     {
         $module = self::provider([['name' => 'api']])->modules()->sole();
 
-        self::assertSame('*', $module->match());
-        self::assertSame('http://localhost', $module->rootUrl());
-        self::assertSame('', $module->prefix());
-        self::assertTrue($module->absolute());
-        self::assertFalse($module->standalone());
-        self::assertTrue($module->matchesName('anything'));
+        self::assertSame('*', $module->match);
+        self::assertSame('http://localhost', $module->rootUrl);
+        self::assertSame('', $module->prefix);
+        self::assertTrue($module->absolute);
+        self::assertFalse($module->standalone);
+        self::assertTrue($module->matches('x', 'anything'));
     }
 
     public function test_a_single_names_pattern_is_accepted(): void
     {
         $module = self::provider([['name' => 'app', 'names' => 'app.*']])->modules()->sole();
 
-        self::assertTrue($module->matchesName('app.home'));
-        self::assertFalse($module->matchesName('api.users'));
+        self::assertTrue($module->matches('x', 'app.home'));
+        self::assertFalse($module->matches('x', 'api.users'));
     }
 
     public function test_a_duplicate_name_is_rejected(): void

@@ -6,6 +6,7 @@ namespace StubbeDev\LaravelStoli\Tests\Integration;
 
 use Illuminate\Filesystem\Filesystem;
 use StubbeDev\LaravelStoli\Exporters\RoutesFileExporter;
+use StubbeDev\LaravelStoli\FileRouteBuilder;
 use StubbeDev\LaravelStoli\Tests\TestCase;
 
 /**
@@ -44,7 +45,7 @@ final class RoutesFileExporterTest extends TestCase
 
         parent::setUp();
 
-        self::useTransformerOutputDirectory(self::tmp().'/types');
+        self::useTransformer(self::tmp().'/types');
     }
 
     protected function tearDown(): void
@@ -59,7 +60,7 @@ final class RoutesFileExporterTest extends TestCase
     {
         $path = self::tmp().'/types/api.ts';
 
-        self::create(RoutesFileExporter::class)->publish();
+        self::apply(self::create(RoutesFileExporter::class)->generate(self::create(FileRouteBuilder::class)->files()));
 
         return (new Filesystem)->get($path);
     }
@@ -83,7 +84,7 @@ final class RoutesFileExporterTest extends TestCase
         touch($path, 100);
         clearstatcache(true, $path);
 
-        self::create(RoutesFileExporter::class)->publish();
+        self::apply(self::create(RoutesFileExporter::class)->generate(self::create(FileRouteBuilder::class)->files()));
 
         clearstatcache(true, $path);
         self::assertSame(100, filemtime($path));
@@ -98,7 +99,7 @@ final class RoutesFileExporterTest extends TestCase
         // A merge or git checkout restores an older committed version of the file.
         (new Filesystem)->put($path, '// stale committed version');
 
-        self::create(RoutesFileExporter::class)->publish();
+        self::apply(self::create(RoutesFileExporter::class)->generate(self::create(FileRouteBuilder::class)->files()));
 
         self::assertSame($content, (new Filesystem)->get($path));
     }

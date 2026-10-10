@@ -6,6 +6,7 @@ namespace StubbeDev\LaravelStoli\Tests\Integration;
 
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Routing\Router;
+use PHPUnit\Framework\Attributes\DataProvider;
 use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
 use StubbeDev\LaravelStoli\Publisher;
 use StubbeDev\LaravelStoli\Tests\Fixtures\TypeScript\UserController;
@@ -13,9 +14,12 @@ use StubbeDev\LaravelStoli\Tests\TestCase;
 use Symfony\Component\Process\Process;
 
 /**
- * Publishes every generated file for the fixture routes into tests/typescript/build and
- * compiles them with tsc --strict against tests/typescript/usage.ts, which asserts the
- * types the routes should narrow to.
+ * Runs the typescript-transformer over the fixtures and publishes every generated file
+ * for the fixture routes into tests/typescript/build, then compiles them with tsc
+ * against tests/typescript/usage.ts, which asserts the types the routes narrow to.
+ *
+ * It does so once per client: the one usage.ts compiling against either router is what
+ * makes switching the `client` option a config change.
  *
  * Needs `npm ci --prefix tests/typescript`; without it the test is skipped, unless
  * STOLI_REQUIRE_TSC is set, as it is in CI.
@@ -38,7 +42,7 @@ final class GeneratedTypeScriptTest extends TestCase
     {
         return [
             'split' => true,
-            'axios' => true,
+            'urls' => true,
             'constants' => [
                 'paths' => [dirname(__DIR__).'/Fixtures/Constants'],
                 'attributes' => [TypeScriptConstants::class],
@@ -65,6 +69,17 @@ final class GeneratedTypeScriptTest extends TestCase
         $router->get('api/kinds/{kind}', static fn () => [])->whereIn('kind', ['a', 'b'])->name('kinds.show');
         $router->get('api/versions/{version}', static fn () => [])->whereIn('version', ['1', '2'])->name('versions.show');
         $router->get('api/posts/{page?}', static fn () => [])->name('posts.index');
+        foreach (['wrappedNull', 'wrappedEnum', 'wrappedNested', 'wrappedUntagged', 'keyed', 'collection', 'shape', 'maybe', 'nothing'] as $method) {
+            $router->get("api/shapes/{$method}", [UserController::class, $method])->name("shapes.{$method}");
+        }
+
+        $router->get('api/bound/{post}/{article}/{byTitle:title}', [UserController::class, 'bound'])->name('bound.show');
+        $router->get('api/users/self-responding', [UserController::class, 'selfResponding'])->name('users.selfResponding');
+        $router->post('api/orders', [UserController::class, 'order'])->name('orders.store');
+        $router->post('api/categories', [UserController::class, 'category'])->name('categories.store');
+        $router->post('api/articles', [UserController::class, 'article'])->name('articles.store');
+        $router->put('api/profile', [UserController::class, 'profile'])->name('profile.update');
+        $router->get('api/statuses/{status}/{page}', [UserController::class, 'byStatus'])->name('statuses.show');
         $router->domain('{account}.app.test')->get('api/dashboard', static fn () => [])->name('tenant.dashboard');
     }
 
@@ -77,17 +92,28 @@ final class GeneratedTypeScriptTest extends TestCase
         $filesystem->delete(dirname(__DIR__, 2).'/.cache');
         $filesystem->ensureDirectoryExists(self::build());
 
-        // Where the transformer's types file would be; TransformerOutput looks for index.d.ts.
-        $filesystem->copy(self::PROJECT.'/types.d.ts', self::build().'/index.d.ts');
-
-        self::useTransformerOutputDirectory(self::build());
+        self::useTransformer(self::build());
+        self::transform();
     }
 
-    public function test_the_generated_files_compile_to_the_expected_types(): void
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function clients(): iterable
     {
+        yield 'axios' => ['axios'];
+        yield 'fetch' => ['fetch'];
+    }
+
+    #[DataProvider('clients')]
+    public function test_the_generated_files_compile_to_the_expected_types(string $client): void
+    {
+        config(['stoli.client' => $client]);
+        self::forgetResolved();
+
         self::create(Publisher::class)->publish();
 
-        foreach (['stoli.js', 'stoli.d.ts', 'api.ts', 'router.ts', 'constants.ts'] as $file) {
+        foreach (['index.d.ts', 'stoli.ts', "stoli-{$client}.ts", 'api.ts', 'api.urls.ts', 'router.ts', 'constants.ts'] as $file) {
             self::assertFileExists(self::build()."/{$file}");
         }
 

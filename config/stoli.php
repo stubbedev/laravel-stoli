@@ -23,17 +23,46 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Axios Router
+    | Generate With typescript:transform
     |--------------------------------------------------------------------------
     |
-    | When enabled, a typed router.ts file is generated alongside your route
-    | files. It wraps axios with the Stoli route service, providing a single
-    | import for all HTTP calls with full route name and parameter autocompletion.
-    |
-    | Requires axios to be installed: npm install axios
+    | When enabled, `php artisan typescript:transform` generates Stoli's files
+    | along with the types, from the very types it writes, and keeps them up
+    | to date in `--watch` mode. `php artisan stoli:generate` works either way.
     |
     */
-    'axios' => false,
+    'transform' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Router Client
+    |--------------------------------------------------------------------------
+    |
+    | When set, a typed router.ts file is generated alongside your route files,
+    | making requests by route name with the route's parameters and response
+    | typed. Both clients take the same calls and respond in the same shape.
+    |
+    | null    - No router.
+    | 'fetch' - Built on the browser's fetch; no dependency.
+    | 'axios' - Built on axios: npm install axios
+    |
+    */
+    'client' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Per-route URL Functions
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, a `<module>.urls.ts` is written next to each route file,
+    | exporting one typed function per route that builds its URL. A bundler
+    | leaves out the ones that are not used, so a page only ships its routes:
+    |
+    |     import { usersShow } from './api.urls';
+    |     usersShow({ user: 1 }); // https://example.com/api/users/1
+    |
+    */
+    'urls' => false,
 
     /*
     |--------------------------------------------------------------------------

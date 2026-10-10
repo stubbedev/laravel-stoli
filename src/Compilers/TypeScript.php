@@ -11,9 +11,40 @@ final class TypeScript
 {
     private const IDENTIFIER = '/^[A-Za-z_$][A-Za-z0-9_$]*$/';
 
+    /**
+     * What separates the words of a name made into an identifier.
+     */
+    private const SEPARATOR = '/[^A-Za-z0-9]+/';
+
+    /**
+     * Words an exported const cannot be named.
+     */
+    private const RESERVED = [
+        'arguments', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete',
+        'do', 'else', 'enum', 'eval', 'export', 'extends', 'false', 'finally', 'for', 'function', 'if', 'implements',
+        'import', 'in', 'instanceof', 'interface', 'let', 'new', 'null', 'package', 'private', 'protected', 'public',
+        'return', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield',
+    ];
+
     public static function isIdentifier(string $name): bool
     {
         return preg_match(self::IDENTIFIER, $name) === 1;
+    }
+
+    /**
+     * A camelCased identifier made of the words of $name: `users.show` is `usersShow`.
+     * One that would start with a digit, or is a reserved word, is made a route's.
+     */
+    public static function identifier(string $name): string
+    {
+        $words = array_values(array_filter((array) preg_split(self::SEPARATOR, $name), static fn (mixed $word): bool => is_string($word) && $word !== ''));
+        $identifier = lcfirst(implode('', array_map(ucfirst(...), array_filter($words, is_string(...)))));
+
+        if ($identifier === '' || ctype_digit($identifier[0])) {
+            return 'route'.ucfirst($identifier);
+        }
+
+        return in_array($identifier, self::RESERVED, true) ? "{$identifier}Route" : $identifier;
     }
 
     /**

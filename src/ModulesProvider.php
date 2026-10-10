@@ -25,11 +25,11 @@ final readonly class ModulesProvider
         foreach ($this->config->modules() as $index => $definition) {
             $module = $this->module($index, $definition);
 
-            if (isset($modules[$module->name()])) {
-                throw StoliException::moduleAlreadyExists($module->name());
+            if (isset($modules[$module->name])) {
+                throw StoliException::moduleAlreadyExists($module->name);
             }
 
-            $modules[$module->name()] = $module;
+            $modules[$module->name] = $module;
         }
 
         return new Collection(array_values($modules));

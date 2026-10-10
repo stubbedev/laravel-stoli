@@ -19,6 +19,13 @@ final class StoliException extends RuntimeException
         return new self("Module #$index is invalid: $reason");
     }
 
+    public static function invalidClient(mixed $client): self
+    {
+        $clients = implode(', ', array_map(static fn (Client $client): string => "'{$client->value}'", Client::cases()));
+
+        return new self('The "client" option must be one of '.$clients.' or null, got '.get_debug_type($client));
+    }
+
     public static function invalidConstantsName(string $class, string $name): self
     {
         return new self("The constants name <$name> on <$class> is not a valid TypeScript identifier");
@@ -39,14 +46,19 @@ final class StoliException extends RuntimeException
         return self::wrap('Could not export constants', $previous);
     }
 
+    public static function cantResolveTypes(?Throwable $previous = null): self
+    {
+        return self::wrap('Could not resolve the types of the typescript-transformer', $previous);
+    }
+
     public static function cantFormat(?Throwable $previous = null): self
     {
         return self::wrap('Could not format the generated files', $previous);
     }
 
-    public static function cantOverrideLibrary(?Throwable $previous = null): self
+    public static function cantExportRuntime(?Throwable $previous = null): self
     {
-        return self::wrap('Could not override library', $previous);
+        return self::wrap('Could not export the route service', $previous);
     }
 
     private static function wrap(string $message, ?Throwable $previous): self

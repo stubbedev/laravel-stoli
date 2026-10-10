@@ -9,7 +9,7 @@ use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
 use StubbeDev\LaravelStoli\Compilers\ConstantsFileCompiler;
 use StubbeDev\LaravelStoli\ConstantGroupBuilder;
 use StubbeDev\LaravelStoli\Exporters\ConstantsExporter;
-use StubbeDev\LaravelStoli\GeneratedFileWriter;
+use StubbeDev\LaravelStoli\Generation\GeneratedFile;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\Tests\TestCase;
 
@@ -71,7 +71,7 @@ final class ConstantsExporterTest extends TestCase
 
         parent::setUp();
 
-        self::useTransformerOutputDirectory(self::tmp().'/types');
+        self::useTransformer(self::tmp().'/types');
     }
 
     protected function tearDown(): void
@@ -84,7 +84,7 @@ final class ConstantsExporterTest extends TestCase
 
     public function test_it_writes_the_discovered_constants_to_the_output_directory(): void
     {
-        self::create(ConstantsExporter::class)->publish();
+        self::apply(self::create(ConstantsExporter::class)->generate());
 
         $this->assertFileExists(self::generatedFile());
 
@@ -104,14 +104,14 @@ final class ConstantsExporterTest extends TestCase
     {
         $exporter = self::create(ConstantsExporter::class);
 
-        $exporter->publish();
+        self::apply($exporter->generate());
         // touch() does not invalidate PHP's stat cache on every version, so the
         // pinned mtime has to be read past it.
         touch(self::generatedFile(), time() - 60);
         clearstatcache(true, self::generatedFile());
         $before = filemtime(self::generatedFile());
 
-        $exporter->publish();
+        self::apply($exporter->generate());
 
         clearstatcache(true, self::generatedFile());
         $this->assertSame($before, filemtime(self::generatedFile()));
@@ -121,10 +121,10 @@ final class ConstantsExporterTest extends TestCase
     {
         $exporter = self::create(ConstantsExporter::class);
 
-        $exporter->publish();
+        self::apply($exporter->generate());
         file_put_contents(self::generatedFile(), '// touched by hand');
 
-        $exporter->publish();
+        self::apply($exporter->generate());
 
         $this->assertStringContainsString('export const StubbeDev = {', (new Filesystem)->get(self::generatedFile()));
     }
@@ -134,7 +134,7 @@ final class ConstantsExporterTest extends TestCase
         self::create(\StubbeDev\LaravelStoli\Publisher::class)->publish();
 
         $this->assertFileExists(self::generatedFile());
-        $this->assertFileExists(self::tmp().'/types/stoli.js');
+        $this->assertFileExists(self::tmp().'/types/stoli.ts');
     }
 
     public function test_disabling_the_feature_writes_nothing(): void
@@ -151,11 +151,9 @@ final class ConstantsExporterTest extends TestCase
             $config,
             new ConstantGroupBuilder($config),
             new ConstantsFileCompiler,
-            self::create(GeneratedFileWriter::class),
-            new Filesystem,
         );
 
-        $exporter->publish();
+        self::apply($exporter->generate());
 
         $this->assertFileDoesNotExist(self::generatedFile());
     }
@@ -175,17 +173,15 @@ final class ConstantsExporterTest extends TestCase
             $config,
             new ConstantGroupBuilder($config),
             new ConstantsFileCompiler,
-            self::create(GeneratedFileWriter::class),
-            new Filesystem,
         );
     }
 
     public function test_a_generated_file_is_removed_once_no_constants_are_left(): void
     {
-        self::create(ConstantsExporter::class)->publish();
+        self::apply(self::create(ConstantsExporter::class)->generate());
         $this->assertFileExists(self::generatedFile());
 
-        $this->exporterWithoutConstants()->publish();
+        self::apply($this->exporterWithoutConstants()->generate());
 
         $this->assertFileDoesNotExist(self::generatedFile());
     }
@@ -195,7 +191,7 @@ final class ConstantsExporterTest extends TestCase
         (new Filesystem)->ensureDirectoryExists(dirname(self::generatedFile()));
         (new Filesystem)->put(self::generatedFile(), "export const HANDWRITTEN = 1;\n");
 
-        $this->exporterWithoutConstants()->publish();
+        self::apply($this->exporterWithoutConstants()->generate());
 
         $this->assertFileExists(self::generatedFile());
     }

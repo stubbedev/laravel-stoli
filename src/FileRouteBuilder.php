@@ -6,92 +6,132 @@ namespace StubbeDev\LaravelStoli;
 
 use Illuminate\Routing\Route as LaravelRoute;
 use Illuminate\Routing\Router as LaravelRouter;
-use Illuminate\Support\Collection;
+use StubbeDev\LaravelStoli\Compilers\ConstraintTypeMapper;
 use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\Items\Module;
+use StubbeDev\LaravelStoli\Items\Parameter;
 use StubbeDev\LaravelStoli\Items\Route;
 
+/**
+ * Builds the route files: the named routes of each module, every one of them published
+ * the way its module says. With `split` off, the modules that are not standalone are
+ * combined into the single configured file.
+ */
 final readonly class FileRouteBuilder
 {
     public function __construct(
         private LaravelRouter $router,
         private ModulesProvider $provider,
-        private RouteMatcher $matcher,
-        private SpatieDataTypeResolver $dataTypeResolver,
+        private SpatieDataTypeResolver $types,
+        private StoliConfig $config,
+        private ConstraintTypeMapper $constraints = new ConstraintTypeMapper,
     ) {}
 
     /**
-     * @return Collection<int, File>
+     * The files to write. A module without a directory to write to has none.
+     *
+     * @return list<File>
      */
-    public function files(): Collection
+    public function files(): array
     {
-        $routes = (new Collection($this->router->getRoutes()->getRoutes()))
-            ->filter(self::isNamed(...))
-            ->unique(static fn (LaravelRoute $route): string => (string) $route->getName())
-            ->values();
+        $routes = [];
 
-        return $this->provider
-            ->modules()
-            ->map(fn (Module $module): File => File::from(
-                $module,
-                $routes
-                    ->filter(fn (LaravelRoute $route): bool => $this->belongsTo($route, $module))
-                    ->map(fn (LaravelRoute $route): Route => $this->createRoute($route, $module))
-                    // A stripped prefix can fold two route names into one.
-                    ->unique(static fn (Route $route): string => $route->name())
-                    ->values()
-            ));
-    }
+        foreach ($this->router->getRoutes()->getRoutes() as $route) {
+            $name = $route->getName();
 
-    private function belongsTo(LaravelRoute $route, Module $module): bool
-    {
-        return $this->matcher->matches($route->uri(), $module->match())
-            && $module->matchesName((string) $route->getName());
-    }
-
-    /**
-     * Group names Laravel leaves on unnamed routes end with a dot and are skipped too.
-     */
-    private static function isNamed(LaravelRoute $route): bool
-    {
-        $name = $route->getName();
-
-        return $name !== null && $name !== '' && ! str_ends_with($name, '.');
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private static function wheres(LaravelRoute $route): array
-    {
-        $wheres = [];
-
-        foreach ($route->wheres as $parameter => $constraint) {
-            if (is_string($parameter) && is_string($constraint)) {
-                $wheres[$parameter] = $constraint;
+            // Group names Laravel leaves on unnamed routes end with a dot and are skipped too.
+            if ($name !== null && $name !== '' && ! str_ends_with($name, '.')) {
+                $routes[$name] ??= $route;
             }
         }
 
-        return $wheres;
+        $files = [];
+        $combined = [];
+
+        foreach ($this->provider->modules() as $module) {
+            $published = [];
+
+            foreach ($routes as $name => $route) {
+                if ($module->matches($route->uri(), (string) $name)) {
+                    // A stripped prefix can fold two route names into one; the first one stays.
+                    $published[$module->routeName((string) $name)] ??= $route;
+                }
+            }
+
+            $built = array_map(fn (string $name, LaravelRoute $route): Route => $this->route($name, $route, $module), array_keys($published), $published);
+
+            if ($module->standalone || $this->config->splitModulesInFiles()) {
+                $files[] = $this->file($module->name, $module->path, $built, $module->standalone);
+            } else {
+                $combined[] = $built;
+            }
+        }
+
+        if ($combined !== []) {
+            $unique = [];
+
+            foreach (array_merge(...$combined) as $route) {
+                $unique[$route->name] ??= $route;
+            }
+
+            array_unshift($files, $this->file($this->config->defaultSingleFileModuleName(), $this->config->defaultOutputPath(), array_values($unique)));
+        }
+
+        return array_values(array_filter($files));
     }
 
-    private function createRoute(LaravelRoute $route, Module $module): Route
+    /**
+     * @param  list<Route>  $routes
+     */
+    private function file(string $name, ?string $directory, array $routes, bool $standalone = false): ?File
     {
-        $resolved = $this->dataTypeResolver->resolve($route);
+        return $directory === null
+            ? null
+            : new File($name, $directory, $this->config->runtimeDirectory($directory), $routes, $standalone);
+    }
+
+    private function route(string $name, LaravelRoute $route, Module $module): Route
+    {
         $domain = $route->getDomain();
+        $domain = is_string($domain) && $domain !== '' ? $domain : null;
+        $methods = array_values(array_intersect(Route::METHODS, array_map(strtolower(...), $route->methods())));
 
         return new Route(
-            name: (string) $route->getName(),
-            rootUrl: $module->rootUrl(),
-            uri: $route->uri(),
-            prefix: $module->prefix(),
-            absolute: $module->absolute(),
-            host: is_string($domain) ? $domain : null,
-            wheres: self::wheres($route),
-            methods: array_values(array_filter($route->methods(), is_string(...))),
-            stripPrefix: $module->stripPrefix(),
-            dataRequestType: $resolved['request'],
-            dataResponseType: $resolved['response'],
+            name: $name,
+            uri: $module->uri($route->uri()),
+            host: $module->host($domain),
+            domain: $domain !== null,
+            parameters: $this->parameters($route),
+            methods: $methods,
+            request: $this->types->request($route),
+            response: $this->types->response($route),
+            status: $this->types->status($route, $methods),
         );
+    }
+
+    /**
+     * The placeholders in the route's domain and path, as Laravel reads them, typed by
+     * their `where` constraints or else by the action's signature.
+     *
+     * @return list<Parameter>
+     */
+    private function parameters(LaravelRoute $route): array
+    {
+        $optional = $route->getOptionalParameterNames();
+        $signature = $this->types->parameters($route);
+        $parameters = [];
+
+        foreach (array_filter($route->parameterNames(), is_string(...)) as $name) {
+            $constraint = $route->wheres[$name] ?? null;
+
+            $parameters[$name] ??= new Parameter(
+                name: $name,
+                // A constraint says what the URL takes; without one, the action's signature does.
+                type: is_string($constraint) ? $this->constraints->map($constraint) : $signature[$name] ?? $this->constraints->map(null),
+                required: ! array_key_exists($name, $optional),
+            );
+        }
+
+        return array_values($parameters);
     }
 }

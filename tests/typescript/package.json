@@ -4,6 +4,6 @@
 	"description": "Type-checks the TypeScript stoli:generate writes, see tests/Integration/GeneratedTypeScriptTest.php",
 	"devDependencies": {
 		"axios": "^1.7.0",
-		"typescript": "^5.6.0"
+		"typescript": "^5.8.0"
 	}
 }

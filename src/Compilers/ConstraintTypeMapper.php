@@ -16,6 +16,11 @@ namespace StubbeDev\LaravelStoli\Compilers;
 final class ConstraintTypeMapper
 {
     /**
+     * Without a constraint, a parameter takes anything that prints into a URL.
+     */
+    public const UNCONSTRAINED = 'string | number';
+
+    /**
      * The exact regex strings produced by Laravel's named constraint helpers.
      * Mapping: regex pattern => TypeScript type.
      *
@@ -29,14 +34,31 @@ final class ConstraintTypeMapper
         // whereAlphaNumeric()
         '[a-zA-Z0-9]+' => 'string',
         // whereUuid()
-        '[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}' => 'string',
+        '[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}' => '`${string}-${string}-${string}-${string}-${string}`',
         // whereUlid()
         '[0-7][0-9a-hjkmnp-tv-zA-HJKMNP-TV-Z]{25}' => 'string',
     ];
 
-    public function map(string $regex): string
+    /**
+     * A value whereIn() joins into an alternation as it is.
+     */
+    private const LITERAL = '/^[\w-]+$/';
+
+    /**
+     * A value that is an integer, which a URL segment holding it may be given as.
+     */
+    private const INTEGER = '/^(0|[1-9][0-9]*)$/';
+
+    /**
+     * Samples a numeric constraint must match and refuse.
+     */
+    private const DIGITS = '123';
+
+    private const LETTERS = 'abc';
+
+    public function map(?string $regex): string
     {
-        return self::EXACT[$regex] ?? $this->infer($regex);
+        return $regex === null ? self::UNCONSTRAINED : self::EXACT[$regex] ?? $this->infer($regex);
     }
 
     /**
@@ -46,18 +68,20 @@ final class ConstraintTypeMapper
     {
         // Simple literal alternation (e.g. "users|groups|all", produced by whereIn) → union of literals.
         // An integer value is taken as a number too, since a URL segment is text either way.
-        if (preg_match('/^[a-zA-Z0-9_-]+(\|[a-zA-Z0-9_-]+)*$/', $regex) === 1) {
+        $values = explode('|', $regex);
+
+        if (array_filter($values, static fn (string $value): bool => preg_match(self::LITERAL, $value) !== 1) === []) {
             $literals = [];
 
-            foreach (explode('|', $regex) as $value) {
-                $literals[] = "'{$value}'";
+            foreach ($values as $value) {
+                $literals[] = TypeScript::string($value);
 
-                if (preg_match('/^(0|[1-9][0-9]*)$/', $value) === 1) {
+                if (preg_match(self::INTEGER, $value) === 1) {
                     $literals[] = $value;
                 }
             }
 
-            return implode(' | ', $literals);
+            return TypeScript::union($literals);
         }
 
         // Generic numeric-only pattern (e.g. "\d+", "[1-9][0-9]*") → number.
@@ -66,8 +90,8 @@ final class ConstraintTypeMapper
         $anchored = "/^(?:{$regex})$/";
         if (
             @preg_match($anchored, '') !== false
-            && preg_match($anchored, '123') === 1
-            && preg_match($anchored, 'abc') === 0
+            && preg_match($anchored, self::DIGITS) === 1
+            && preg_match($anchored, self::LETTERS) === 0
         ) {
             return 'number';
         }

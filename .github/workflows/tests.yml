@@ -90,7 +90,7 @@ jobs:
         if: steps.resolve.outputs.ok == 'true'
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
 
-      # The published stub is plain JS; node is preinstalled on the runner.
-      - name: Check the route service stub
+      # The runtime modules are transpiled by the TypeScript compiler installed above.
+      - name: Check the runtime modules
         if: steps.resolve.outputs.ok == 'true'
-        run: node tests/routeservice.test.mjs
+        run: node tests/runtime.test.mjs

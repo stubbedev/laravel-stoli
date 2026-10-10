@@ -35,9 +35,9 @@ final class ConstraintTypeMapperTest extends TestCase
         self::assertSame('string', $this->mapper->map('[a-zA-Z0-9]+'));
     }
 
-    public function test_where_uuid_maps_to_string(): void
+    public function test_where_uuid_maps_to_a_uuid_shaped_string(): void
     {
-        self::assertSame('string', $this->mapper->map('[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}'));
+        self::assertSame('`${string}-${string}-${string}-${string}-${string}`', $this->mapper->map('[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}'));
     }
 
     public function test_where_ulid_maps_to_string(): void

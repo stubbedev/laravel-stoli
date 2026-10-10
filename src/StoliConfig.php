@@ -47,9 +47,30 @@ final readonly class StoliConfig
         return $this->string('single.name') ?? 'api';
     }
 
-    public function axiosRouter(): bool
+    /**
+     * The client the routers are generated for, or null for no routers. The `axios`
+     * switch of earlier versions still picks axios.
+     *
+     * @throws StoliException when the `client` option names no client
+     */
+    public function client(): ?Client
     {
-        return (bool) ($this->config['axios'] ?? false);
+        $client = $this->config['client'] ?? (($this->config['axios'] ?? false) === true ? Client::Axios->value : null);
+
+        if ($client === null || $client === false) {
+            return null;
+        }
+
+        return (is_string($client) ? Client::tryFrom($client) : null) ?? throw StoliException::invalidClient($client);
+    }
+
+    /**
+     * Whether a `<module>.urls.ts` of per-route URL functions is written next to each
+     * route file.
+     */
+    public function urls(): bool
+    {
+        return (bool) ($this->config['urls'] ?? false);
     }
 
     public function constants(): bool
@@ -117,6 +138,15 @@ final readonly class StoliConfig
     public function defaultOutputPath(): ?string
     {
         return $this->output->directory;
+    }
+
+    /**
+     * The directory the route service is written to for a route file in $directory: the
+     * typescript-transformer output directory, or without one the file's own directory.
+     */
+    public function runtimeDirectory(string $directory): string
+    {
+        return $this->defaultOutputPath() ?? $directory;
     }
 
     /**

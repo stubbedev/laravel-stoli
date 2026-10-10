@@ -8,3 +8,5 @@ tests/api.json
 
 .claude
 .cache
+/e2e/ts/node_modules/
+/e2e/ts/dist/

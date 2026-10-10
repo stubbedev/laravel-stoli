@@ -10,10 +10,25 @@ use ReflectionClass;
 /**
  * Resolves a class name as written in a PHPDoc tag the way PHP would resolve it in the
  * declaring file: through its `use` imports, grouped ones included, and otherwise
- * relative to its namespace.
+ * relative to its namespace. The imports are read from PHP's own tokens.
  */
 final class ClassNameResolver
 {
+    /**
+     * The tokens a class-like declaration starts with; past one, `use` imports traits.
+     */
+    private const DECLARATIONS = [T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM];
+
+    /**
+     * The tokens a name in a `use` statement is made of.
+     */
+    private const NAMES = [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED];
+
+    /**
+     * The tokens that carry no meaning in a `use` statement.
+     */
+    private const IGNORED = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
+
     /**
      * The class imports per file: lowercased alias => fully-qualified name.
      *
@@ -38,10 +53,11 @@ final class ClassNameResolver
 
         // The first segment of a name is what an import can alias: Data\UserData
         // resolves through an import of the Data namespace.
-        $first = strtolower(explode('\\', $name, 2)[0]);
+        [$first] = explode('\\', $name, 2);
+        $alias = strtolower($first);
 
-        if (isset($imports[$first])) {
-            return self::existing($imports[$first].substr($name, strlen($first)));
+        if (isset($imports[$alias])) {
+            return self::existing($imports[$alias].substr($name, strlen($first)));
         }
 
         $namespace = $context->getNamespaceName();
@@ -54,7 +70,7 @@ final class ClassNameResolver
      */
     private static function existing(string $class): ?string
     {
-        return class_exists($class) || interface_exists($class) ? $class : null;
+        return class_exists($class) || interface_exists($class) || enum_exists($class) ? $class : null;
     }
 
     /**
@@ -79,65 +95,73 @@ final class ClassNameResolver
      */
     private static function parse(string $source): array
     {
-        $imports = [];
-        $statement = null;
+        $tokens = array_values(array_filter(
+            PhpToken::tokenize($source),
+            static fn (PhpToken $token): bool => ! $token->is(self::IGNORED),
+        ));
 
-        foreach (PhpToken::tokenize($source) as $token) {
-            if ($token->is([T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM])) {
+        $imports = [];
+
+        foreach ($tokens as $index => $token) {
+            if ($token->is(self::DECLARATIONS)) {
                 break;
             }
 
-            if ($statement === null) {
-                $statement = $token->is(T_USE) ? '' : null;
-
-                continue;
+            if ($token->is(T_USE)) {
+                $imports = [...$imports, ...self::statement($tokens, $index + 1)];
             }
-
-            if ($token->text !== ';') {
-                $statement .= $token->is([T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]) ? ' ' : $token->text;
-
-                continue;
-            }
-
-            foreach (self::parseStatement($statement) as $alias => $class) {
-                $imports[$alias] = $class;
-            }
-
-            $statement = null;
         }
 
         return $imports;
     }
 
     /**
+     * The imports of the `use` statement starting at $index.
+     *
+     * @param  list<PhpToken>  $tokens
      * @return array<string, string>
      */
-    private static function parseStatement(string $statement): array
+    private static function statement(array $tokens, int $index): array
     {
-        $statement = trim((string) preg_replace('/\s+/', ' ', $statement));
+        $first = $tokens[$index] ?? null;
 
-        if (preg_match('/^(function|const)\b/i', $statement) === 1) {
+        // Function and constant imports, and the `use` of a closure.
+        if ($first === null || $first->is([T_FUNCTION, T_CONST]) || $first->text === '(') {
             return [];
         }
 
-        $prefix = '';
-
-        if (preg_match('/^([^{]*)\{(.*)\}$/s', $statement, $group) === 1) {
-            $prefix = trim(trim($group[1]), '\\').'\\';
-            $statement = $group[2];
-        }
-
         $imports = [];
+        $prefix = '';
+        $class = null;
+        $alias = null;
 
-        foreach (explode(',', $statement) as $clause) {
-            if (preg_match('/^\s*\\\\?([\w\\\\]+)(?:\s+as\s+(\w+))?\s*$/i', $clause, $match) !== 1) {
-                continue;
+        for (; isset($tokens[$index]); $index++) {
+            $token = $tokens[$index];
+
+            if ($token->is(self::NAMES) && $alias === '') {
+                $alias = $token->text;
+            } elseif ($token->is(self::NAMES)) {
+                $class .= ltrim($token->text, '\\');
+            } elseif ($token->is(T_NS_SEPARATOR)) {
+                $class .= '\\';
+            } elseif ($token->is(T_AS)) {
+                $alias = '';
+            } elseif ($token->text === '{') {
+                // A group: what came before is the prefix of every name in it.
+                $prefix = rtrim((string) $class, '\\').'\\';
+                $class = null;
+            } elseif (in_array($token->text, [',', '}', ';'], true)) {
+                if ($class !== null && $class !== '') {
+                    $imports[strtolower($alias !== null && $alias !== '' ? $alias : class_basename($class))] = $prefix.$class;
+                }
+
+                $class = null;
+                $alias = null;
+
+                if ($token->text === ';') {
+                    break;
+                }
             }
-
-            $class = $prefix.$match[1];
-            $alias = $match[2] ?? '';
-            $alias = $alias !== '' ? $alias : class_basename($class);
-            $imports[strtolower($alias)] = $class;
         }
 
         return $imports;

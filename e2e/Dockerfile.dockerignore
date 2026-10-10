@@ -1,0 +1,10 @@
+*
+!composer.json
+!src
+!config
+!resources
+!e2e/app
+!e2e/ts/*.json
+!e2e/ts/*.ts
+!e2e/run.sh
+!e2e/patch.php

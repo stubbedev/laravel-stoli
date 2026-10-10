@@ -1,0 +1,52 @@
+name: E2E
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e:
+    name: PHP ${{ matrix.php }}, Laravel ${{ matrix.laravel }}, Node ${{ matrix.node }}, TypeScript ${{ matrix.typescript }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    # Every PHP and Laravel pair Laravel supports, with every Node and TypeScript line
+    # paired across them. Each job runs every scenario in e2e/run.sh: each writer, split
+    # and single files, each client and none, inside typescript:transform and on its own,
+    # with and without a formatter and the per-route URL functions, then watch mode.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { php: '8.2', laravel: '12', node: '20', typescript: '5.8' }
+          - { php: '8.3', laravel: '12', node: '22', typescript: 'latest' }
+          - { php: '8.3', laravel: '13', node: '20', typescript: 'latest' }
+          - { php: '8.4', laravel: '12', node: '24', typescript: '5.8' }
+          - { php: '8.4', laravel: '13', node: '22', typescript: '5.8' }
+          - { php: '8.5', laravel: '12', node: '22', typescript: 'latest' }
+          - { php: '8.5', laravel: '13', node: '24', typescript: 'latest' }
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build the application
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: e2e/Dockerfile
+          load: true
+          tags: stoli-e2e
+          build-args: |
+            PHP_VERSION=${{ matrix.php }}
+            LARAVEL_VERSION=${{ matrix.laravel }}
+            NODE_VERSION=${{ matrix.node }}
+            TYPESCRIPT_VERSION=${{ matrix.typescript }}
+          cache-from: type=gha,scope=e2e-${{ matrix.php }}-${{ matrix.laravel }}-${{ matrix.node }}-${{ matrix.typescript }}
+          cache-to: type=gha,mode=max,scope=e2e-${{ matrix.php }}-${{ matrix.laravel }}-${{ matrix.node }}-${{ matrix.typescript }}
+
+      - name: Run every scenario
+        run: docker run --rm stoli-e2e

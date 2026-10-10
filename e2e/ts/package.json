@@ -1,0 +1,12 @@
+{
+	"name": "laravel-stoli-e2e",
+	"private": true,
+	"description": "Type-checks and runs what stoli:generate writes in a real Laravel application, see e2e/run.sh",
+	"devDependencies": {
+		"axios": "^1.7.0",
+		"prettier": "^3.3.0",
+		"typescript": "^5.8.0",
+		"esbuild": "^0.25.0",
+		"@types/node": "^22.0.0"
+	}
+}

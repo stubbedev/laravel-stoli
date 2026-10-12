@@ -95,6 +95,7 @@ expectType<
 			priority?: 1 | 2 | 3 | null;
 			published?: boolean | 0 | 1 | '0' | '1';
 			tags?: string[];
+			topics?: ('news' | 'review')[];
 			meta?: { description?: string | null };
 			authors: { name: string; email?: string }[];
 			cover?: Blob;

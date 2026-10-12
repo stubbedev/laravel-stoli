@@ -22,6 +22,8 @@ final class StoreArticleRequest extends ApiRequest
             'priority' => 'nullable|integer|in:1,2,3',
             'tags' => 'array',
             'tags.*' => 'string',
+            'topics' => 'array',
+            'topics.*' => Rule::in(['news', 'review']),
             'authors' => 'required|array',
             'authors.*.name' => 'required|string',
             'authors.*.email' => 'email',

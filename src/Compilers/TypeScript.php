@@ -96,6 +96,52 @@ final class TypeScript
     }
 
     /**
+     * $type as the operand of an operator that binds tighter than its own: parenthesized
+     * when it is a union or intersection, which `[]` or an indexed access would otherwise
+     * apply to only the last member of, so `'a' | 'b'` as an array item is `('a' | 'b')[]`.
+     */
+    public static function operand(string $type): string
+    {
+        return self::isCompound($type) ? "({$type})" : $type;
+    }
+
+    /**
+     * Whether $type joins types with `|` or `&` outside every bracket and literal in it.
+     */
+    private static function isCompound(string $type): bool
+    {
+        $depth = 0;
+        $quote = null;
+        $length = strlen($type);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $type[$i];
+
+            if ($quote !== null) {
+                if ($char === '\\') {
+                    $i++;
+                } elseif ($char === $quote) {
+                    $quote = null;
+                }
+
+                continue;
+            }
+
+            if ($char === "'" || $char === '"' || $char === '`') {
+                $quote = $char;
+            } elseif (str_contains('([{<', $char)) {
+                $depth++;
+            } elseif (str_contains(')]}>', $char)) {
+                $depth--;
+            } elseif ($depth === 0 && ($char === '|' || $char === '&')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * A union of already rendered types; `never` when there are none.
      *
      * @param  list<string>  $types

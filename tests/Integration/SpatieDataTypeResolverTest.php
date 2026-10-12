@@ -150,6 +150,7 @@ final class SpatieDataTypeResolverTest extends TestCase
 
         self::assertSame('StoreArticleRequestInput', $request?->type);
         self::assertStringStartsWith("export type StoreArticleRequestInput = { locale: 'en' | 'da'; title: string;", $request->declarations['StoreArticleRequestInput']);
+        self::assertStringContainsString("topics?: ('news' | 'review')[];", $request->declarations['StoreArticleRequestInput']);
     }
 
     public function test_a_form_request_without_rules_takes_in_nothing_it_declares(): void

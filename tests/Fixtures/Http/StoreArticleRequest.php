@@ -23,6 +23,8 @@ final class StoreArticleRequest extends ApiRequest
             'published' => 'boolean',
             'tags' => 'array',
             'tags.*' => 'string',
+            'topics' => 'array',
+            'topics.*' => Rule::in(['news', 'review']),
             'meta.description' => 'nullable|string',
             'authors' => 'required|array',
             'authors.*.name' => 'required|string',

@@ -31,7 +31,7 @@ final readonly class DataType
      * @param  string  $type  the TypeScript type expression, e.g. App.Http.Data.UserData
      * @param  array<string, list<string>>  $imports  file => the names to import from it
      * @param  array<string, string>  $declarations  name => the declaration of that name
-     * @param  list<string>  $members  the members of a union, which needs parentheses to be an array item
+     * @param  list<string>  $members  the members of a union, which a union it is part of takes in its place
      */
     public function __construct(
         public string $type,
@@ -144,7 +144,7 @@ final readonly class DataType
      */
     public function at(string $key): self
     {
-        return self::combine("{$this->type}[".TypeScript::string($key).']', [$this]);
+        return self::combine(TypeScript::operand($this->type).'['.TypeScript::string($key).']', [$this]);
     }
 
     /**
@@ -169,7 +169,7 @@ final readonly class DataType
      */
     public function list(): self
     {
-        return self::combine($this->members !== [] ? "({$this->type})[]" : "{$this->type}[]", [$this]);
+        return self::combine(TypeScript::operand($this->type).'[]', [$this]);
     }
 
     /**

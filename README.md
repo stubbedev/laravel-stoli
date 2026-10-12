@@ -109,7 +109,8 @@ in as their own input types, however deep, cycles included. Validation attribute
 | `#[Prohibited]` | left out |
 | `#[Confirmed]` | adds `{field}_confirmation` |
 
-A **FormRequest**, or any subclass of one, is typed by its `rules()`, its parents' included.
+A **FormRequest**, or any subclass of one, is typed by its `rules()`, its parents' included;
+one without rules, which only authorizes, leaves the route open like an action without one.
 `meta.title` nests, `authors.*.name` makes `{ name: string }[]`, and:
 
 | Rules | Input |

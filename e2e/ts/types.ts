@@ -44,6 +44,7 @@ expectType<Equal<'internal' extends keyof OrderDataInput ? true : false, false>>
 expectType<Equal<CategoryDataInput['children'], CategoryDataInput[] | undefined>>();
 expectType<Equal<StoreArticleRequestInput['locale'], 'en' | 'da'>>();
 expectType<Equal<StoreArticleRequestInput['authors'], { name: string; email?: string }[]>>();
+expectType<Equal<ApiRouteParams['articles.publish']['article'], number>>();
 
 expectType<Equal<typeof App.Support.Permission.VIEW, 'view'>>();
 

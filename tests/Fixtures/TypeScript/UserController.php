@@ -6,7 +6,7 @@ namespace StubbeDev\LaravelStoli\Tests\Fixtures\TypeScript;
 
 use Illuminate\Support\Collection;
 use LogicException;
-use StubbeDev\LaravelStoli\Tests\Fixtures\Http\StoreArticleRequest;
+use StubbeDev\LaravelStoli\Tests\Fixtures\Http\{AuthorizeArticleRequest, StoreArticleRequest};
 use StubbeDev\LaravelStoli\Tests\Fixtures\Models\{Article, Post};
 use Spatie\LaravelData\{CursorPaginatedDataCollection, DataCollection, PaginatedDataCollection};
 use StubbeDev\LaravelStoli\Tests\Fixtures\TypeScript\Data\{ApiResponseData, CategoryData, OrderData, ProfileData, SelfRespondingUserData, Status, StoreUserData, UserData as User, WrappedUserData};
@@ -179,6 +179,11 @@ final class UserController
     }
 
     public function article(StoreArticleRequest $request): void
+    {
+        throw new LogicException('not called');
+    }
+
+    public function publish(AuthorizeArticleRequest $request, int $article): void
     {
         throw new LogicException('not called');
     }

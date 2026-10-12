@@ -13,6 +13,7 @@ Route::put('users/{user}', [E2eController::class, 'update'])->whereNumber('user'
 Route::post('orders', [E2eController::class, 'order'])->name('orders.store');
 Route::post('categories', [E2eController::class, 'category'])->name('categories.store');
 Route::post('articles', [E2eController::class, 'article'])->name('articles.store');
+Route::post('articles/{article}/publish', [E2eController::class, 'publish'])->whereNumber('article')->name('articles.publish');
 Route::post('folders/{folder}/files', [E2eController::class, 'upload'])->name('files.store');
 Route::put('folders/{folder}/files', [E2eController::class, 'upload'])->name('files.update');
 Route::get('search/{page?}', [E2eController::class, 'search'])->name('search');

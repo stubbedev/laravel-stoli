@@ -67,13 +67,14 @@ final class RequestTypes
 
     /**
      * The input type of a FormRequest, a subclass of one's subclass included, from its
-     * rules(); null when they cannot be read.
+     * rules(); null when they cannot be read, or when there are none: a request that only
+     * authorizes says nothing about what else the route takes.
      */
     public function formRequest(string $class): ?DataType
     {
         if (! isset($this->types[$class])) {
             $rules = self::isFormRequest($class) ? $this->formRequestRules($class) : null;
-            $type = $rules === null ? null : $this->tree($rules);
+            $type = $rules === null || $rules === [] ? null : $this->tree($rules);
             $name = $type === null ? '' : $this->name($class);
 
             $this->types[$class] = $type === null ? false : [

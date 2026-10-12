@@ -79,6 +79,10 @@ async function main(): Promise<void> {
 	const rejected = Stoli.validationErrors('articles.store', await failure(Stoli.post('articles.store', { locale: 'xx' } as never)));
 	assert.ok(rejected?.errors.locale && rejected.errors.title && rejected.errors.authors);
 
+	// A request without rules leaves the route open: the path takes its parameter, the body the rest
+	const published = await Stoli.post('articles.publish', { article: 3, notify: true });
+	assert.deepStrictEqual(published.data, { article: 3, notify: true });
+
 	// Files go out as multipart, flattened the way PHP reads them back
 	const file = new File(['abc'], 'a.txt');
 	const uploaded = await Stoli.post('files.store', { folder: 4, file, meta: { tags: ['x', 'y'], flag: true } });

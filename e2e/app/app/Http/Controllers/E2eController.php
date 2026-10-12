@@ -10,6 +10,7 @@ use App\Data\OrderData;
 use App\Data\StoreUserData;
 use App\Data\UserData;
 use App\Enums\Status;
+use App\Http\Requests\PublishArticleRequest;
 use App\Http\Requests\StoreArticleRequest;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -73,6 +74,14 @@ final class E2eController
             'authors' => count((array) $request->validated('authors')),
             'locale' => (string) $request->validated('locale'),
         ];
+    }
+
+    /**
+     * @return array{article: int, notify: bool}
+     */
+    public function publish(PublishArticleRequest $request, int $article): array
+    {
+        return ['article' => $article, 'notify' => $request->boolean('notify')];
     }
 
     /**

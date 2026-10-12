@@ -152,6 +152,11 @@ final class SpatieDataTypeResolverTest extends TestCase
         self::assertStringStartsWith("export type StoreArticleRequestInput = { locale: 'en' | 'da'; title: string;", $request->declarations['StoreArticleRequestInput']);
     }
 
+    public function test_a_form_request_without_rules_takes_in_nothing_it_declares(): void
+    {
+        self::assertNull(self::create(SpatieDataTypeResolver::class)->request(self::route('publish')));
+    }
+
     /**
      * @return iterable<string, array{string, list<string>, string}>
      */

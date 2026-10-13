@@ -231,17 +231,25 @@ own. A missing required parameter throws; query strings are written the way PHP'
 
 ```php
 return [
-    'split'     => true,   // one file per module, or all in `single.name`
-    'transform' => true,   // generate with typescript:transform
-    'client'    => null,   // 'fetch', 'axios' or null
-    'urls'      => false,  // per-route URL functions
-    'single'    => ['name' => 'api'],
-    'constants' => ['enabled' => true, 'name' => 'constants', 'path' => null, 'paths' => null],
-    'modules'   => [
+    'split'          => true,   // one file per module, or all in `single.name`
+    'transform'      => true,   // generate with typescript:transform
+    'client'         => null,   // 'fetch', 'axios' or null
+    'urls'           => false,  // per-route URL functions
+    'import_aliases' => [],     // e.g. ['@' => base_path('frontend')]
+    'single'         => ['name' => 'api'],
+    'constants'      => ['enabled' => true, 'name' => 'constants', 'path' => null, 'paths' => null],
+    'modules'        => [
         ['match' => '*', 'name' => 'api', 'rootUrl' => env('APP_URL'), 'absolute' => true],
     ],
 ];
 ```
+
+With `import_aliases`, the generated files import one another through your tsconfig `paths`
+rather than relatively. Map each alias to the absolute directory it stands for, without a
+trailing slash on the alias: with `['@' => base_path('frontend')]` and `"paths": { "@/*": ["./*"] }`
+in `frontend/tsconfig.json`, a router in `frontend/src/types` imports `@/src/types/api`, not
+`./api`. A file under several aliased directories goes through the deepest; a file under none
+is imported relatively.
 
 | Module option | Default | |
 |---|---|---|

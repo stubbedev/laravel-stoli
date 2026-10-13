@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli\Exporters;
 
 use Illuminate\Filesystem\Filesystem;
+use RuntimeException;
 use StubbeDev\LaravelStoli\Client;
 use StubbeDev\LaravelStoli\Generation\GeneratedFile;
 use StubbeDev\LaravelStoli\Generation\Generation;
 use StubbeDev\LaravelStoli\Generation\Removal;
+use StubbeDev\LaravelStoli\ImportAliases;
 use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\StoliException;
@@ -48,16 +50,17 @@ final readonly class RuntimeExporter
             ...array_map(static fn (File $file): string => $file->runtime, $files),
         ]));
         $client = $this->config->client();
+        $aliases = $this->config->importAliases();
         $generated = [];
         $removals = [];
 
         try {
             foreach ($directories as $directory) {
-                $generated[] = $this->copy($directory, self::MODULE);
+                $generated[] = $this->copy($directory, self::MODULE, $aliases);
 
                 foreach (Client::cases() as $case) {
                     if ($case === $client) {
-                        $generated[] = $this->copy($directory, $case->module());
+                        $generated[] = $this->copy($directory, $case->module(), $aliases);
                     } else {
                         $removals[] = new Removal(join_paths($directory, "{$case->module()}.ts"));
                     }
@@ -74,12 +77,18 @@ final readonly class RuntimeExporter
         return new Generation($generated, $removals);
     }
 
-    private function copy(string $directory, string $module): GeneratedFile
+    /**
+     * The resources import one another, and in their examples the route files, from their
+     * own directory; those imports are taken through the aliases like any generated one.
+     */
+    private function copy(string $directory, string $module, ImportAliases $aliases): GeneratedFile
     {
-        return new GeneratedFile(
-            join_paths($directory, "{$module}.ts"),
+        $contents = preg_replace_callback(
+            "~ from '\./([^'/]+)'~",
+            static fn (array $import): string => " from '".$aliases->importPath($directory, join_paths($directory, $import[1]))."'",
             $this->filesystem->get(join_paths($this->config->resourcesPath(), "{$module}.ts")),
-            format: false,
-        );
+        ) ?? throw new RuntimeException("Could not rewrite the imports of {$module}.ts: ".preg_last_error_msg());
+
+        return new GeneratedFile(join_paths($directory, "{$module}.ts"), $contents, format: false);
     }
 }

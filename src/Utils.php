@@ -20,21 +20,27 @@ final readonly class Utils
      */
     public static function relativeImportPath(string $fromDir, string $toFile): string
     {
-        foreach (self::TS_EXTENSIONS as $extension) {
-            if (str_ends_with($toFile, $extension)) {
-                $toFile = substr($toFile, 0, -strlen($extension));
-
-                break;
-            }
-        }
-
-        $rel = self::relativePath($fromDir, $toFile);
+        $rel = self::relativePath($fromDir, self::withoutTsExtension($toFile));
 
         if ($rel === '') {
             return '.';
         }
 
         return str_starts_with($rel, '.') ? $rel : './'.$rel;
+    }
+
+    /**
+     * $file without the .d.ts / .ts extension TypeScript resolves by itself.
+     */
+    public static function withoutTsExtension(string $file): string
+    {
+        foreach (self::TS_EXTENSIONS as $extension) {
+            if (str_ends_with($file, $extension)) {
+                return substr($file, 0, -strlen($extension));
+            }
+        }
+
+        return $file;
     }
 
     /**

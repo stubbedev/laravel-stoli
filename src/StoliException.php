@@ -26,6 +26,11 @@ final class StoliException extends RuntimeException
         return new self('The "client" option must be one of '.$clients.' or null, got '.get_debug_type($client));
     }
 
+    public static function invalidImportAliases(string $reason): self
+    {
+        return new self("The \"import_aliases\" option is invalid: $reason");
+    }
+
     public static function invalidConstantsName(string $class, string $name): self
     {
         return new self("The constants name <$name> on <$class> is not a valid TypeScript identifier");

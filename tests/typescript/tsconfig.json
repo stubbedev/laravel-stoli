@@ -14,7 +14,10 @@
 		"noUncheckedIndexedAccess": true,
 		"exactOptionalPropertyTypes": true,
 		"noImplicitOverride": true,
-		"noPropertyAccessFromIndexSignature": true
+		"noPropertyAccessFromIndexSignature": true,
+		"paths": {
+			"@/*": ["./*"]
+		}
 	},
 	"files": ["build/index.d.ts", "usage.ts"]
 }

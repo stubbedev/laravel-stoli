@@ -73,6 +73,16 @@ final readonly class StoliConfig
         return (bool) ($this->config['urls'] ?? false);
     }
 
+    /**
+     * The aliases the generated files import one another by.
+     *
+     * @throws StoliException when the `import_aliases` option is malformed
+     */
+    public function importAliases(): ImportAliases
+    {
+        return ImportAliases::fromConfig($this->config['import_aliases'] ?? []);
+    }
+
     public function constants(): bool
     {
         return (bool) Arr::get($this->config, 'constants.enabled', true);

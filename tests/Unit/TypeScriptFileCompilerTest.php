@@ -10,15 +10,18 @@ use StubbeDev\LaravelStoli\Items\DataType;
 use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\Items\Parameter;
 use StubbeDev\LaravelStoli\Items\Route;
+use StubbeDev\LaravelStoli\StoliConfig;
 
 final class TypeScriptFileCompilerTest extends TestCase
 {
     /**
      * @param  list<Route>  $routes
+     * @param  array<string, string>  $aliases
      */
-    private static function compile(array $routes, string $name = 'api'): string
+    private static function compile(array $routes, string $name = 'api', array $aliases = []): string
     {
-        return (new TypeScriptFileCompiler)->compile(new File($name, '/app/resources/routes', '/app/resources/types', $routes));
+        return (new TypeScriptFileCompiler(new StoliConfig(['import_aliases' => $aliases])))
+            ->compile(new File($name, '/app/resources/routes', '/app/resources/types', $routes));
     }
 
     public function test_it_compiles_the_definitions_the_aliases_and_the_routes(): void
@@ -137,5 +140,28 @@ final class TypeScriptFileCompilerTest extends TestCase
     public function test_a_file_without_routes_compiles_to_an_empty_object(): void
     {
         self::assertStringContainsString('const routes: RouteMap<ApiRoutes> = {};', self::compile([]));
+    }
+
+    public function test_imports_from_an_aliased_directory_go_through_the_alias(): void
+    {
+        $output = self::compile(
+            [new Route('users.show', 'users', response: DataType::imported('UserData', '/app/resources/types/index.d.ts'))],
+            aliases: ['@' => '/app/resources'],
+        );
+
+        self::assertStringStartsWith(<<<'TS'
+        import type { NamesFor, ParamsOf, ResponsesOf, RouteMap, StatusesOf } from '@/types/stoli';
+        import type { UserData } from '@/types/index';
+        TS, $output);
+    }
+
+    public function test_imports_from_outside_every_aliased_directory_stay_relative(): void
+    {
+        $output = self::compile(
+            [new Route('users.show', 'users', response: DataType::imported('UserData', '/app/vendor/types/index.d.ts'))],
+            aliases: ['@' => '/app/resources'],
+        );
+
+        self::assertStringContainsString("import type { UserData } from '../../vendor/types/index';", $output);
     }
 }

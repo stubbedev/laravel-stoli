@@ -66,6 +66,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Import Aliases
+    |--------------------------------------------------------------------------
+    |
+    | The generated files import one another relatively. To have them import
+    | through your tsconfig `paths` instead, map each alias to the absolute
+    | directory it stands for. A file under one of the directories is imported
+    | through the alias of the deepest; any other file stays relative:
+    |
+    |     'import_aliases' => ['@' => base_path('frontend')],
+    |
+    |     import routes from '@/src/types/api'; // not './api'
+    |
+    */
+    'import_aliases' => [],
+
+    /*
+    |--------------------------------------------------------------------------
     | Constants
     |--------------------------------------------------------------------------
     |

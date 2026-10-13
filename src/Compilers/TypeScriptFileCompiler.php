@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli\Compilers;
 
 use Illuminate\Support\Str;
+use StubbeDev\LaravelStoli\Exporters\RuntimeExporter;
+use StubbeDev\LaravelStoli\ImportAliases;
 use StubbeDev\LaravelStoli\Items\DataType;
 use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\Items\Route;
-use StubbeDev\LaravelStoli\Utils;
+use StubbeDev\LaravelStoli\StoliConfig;
 
 use function Illuminate\Filesystem\join_paths;
 
@@ -21,12 +23,14 @@ use function Illuminate\Filesystem\join_paths;
  */
 final readonly class TypeScriptFileCompiler
 {
+    public function __construct(private StoliConfig $config) {}
+
     public function compile(File $file): string
     {
         $module = Str::studly($file->name);
         $definitions = "{$module}Routes";
         $referenced = array_values(array_filter(array_merge(...array_map(static fn (Route $route): array => [$route->request, $route->response], $file->routes))));
-        $imports = self::imports($file, [
+        $imports = self::imports($file, $this->config->importAliases(), [
             DataType::runtime('NamesFor'),
             DataType::runtime('ParamsOf'),
             DataType::runtime('ResponsesOf'),
@@ -122,14 +126,13 @@ final readonly class TypeScriptFileCompiler
      *
      * @param  list<DataType>  $types
      */
-    private static function imports(File $file, array $types): string
+    private static function imports(File $file, ImportAliases $aliases, array $types): string
     {
-        $from = Utils::absolutePath($file->directory);
         $lines = [];
 
         foreach (DataType::merge(...$types) as $source => $names) {
-            $source = $source === DataType::RUNTIME ? join_paths(Utils::absolutePath($file->runtime), 'stoli') : $source;
-            $lines[] = 'import type { '.implode(', ', $names)." } from '".Utils::relativeImportPath($from, $source)."';";
+            $source = $source === DataType::RUNTIME ? join_paths($file->runtime, RuntimeExporter::MODULE) : $source;
+            $lines[] = 'import type { '.implode(', ', $names)." } from '".$aliases->importPath($file->directory, $source)."';";
         }
 
         return implode("\n", $lines);

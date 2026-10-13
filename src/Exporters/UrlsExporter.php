@@ -10,9 +10,9 @@ use StubbeDev\LaravelStoli\Compilers\TypeScriptFileCompiler;
 use StubbeDev\LaravelStoli\Generation\GeneratedFile;
 use StubbeDev\LaravelStoli\Generation\Generation;
 use StubbeDev\LaravelStoli\Generation\Removal;
+use StubbeDev\LaravelStoli\ImportAliases;
 use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\StoliConfig;
-use StubbeDev\LaravelStoli\Utils;
 
 use function Illuminate\Filesystem\join_paths;
 
@@ -31,6 +31,7 @@ final readonly class UrlsExporter
      */
     public function generate(array $files): Generation
     {
+        $aliases = $this->config->importAliases();
         $generated = [];
         $removals = [];
 
@@ -38,7 +39,7 @@ final readonly class UrlsExporter
             $path = join_paths($file->directory, "{$file->name}.urls.ts");
 
             if ($this->config->urls()) {
-                $generated[] = new GeneratedFile($path, self::compile($file));
+                $generated[] = new GeneratedFile($path, self::compile($file, $aliases));
             } else {
                 $removals[] = new Removal($path);
             }
@@ -47,10 +48,11 @@ final readonly class UrlsExporter
         return new Generation($generated, $removals);
     }
 
-    private static function compile(File $file): string
+    private static function compile(File $file, ImportAliases $aliases): string
     {
         $params = Str::studly($file->name).'RouteParams';
-        $stoli = Utils::relativeImportPath(Utils::absolutePath($file->directory), join_paths(Utils::absolutePath($file->runtime), RuntimeExporter::MODULE));
+        $stoli = $aliases->importPath($file->directory, join_paths($file->runtime, RuntimeExporter::MODULE));
+        $routes = $aliases->importPath($file->directory, $file->path());
         $taken = [];
         $functions = [];
 
@@ -78,7 +80,7 @@ final readonly class UrlsExporter
 
         return <<<TS
         import { url, type Arguments } from '{$stoli}';
-        import type { {$params} } from './{$file->name}';
+        import type { {$params} } from '{$routes}';
 
         {$body}
 

@@ -97,24 +97,35 @@ final class GeneratedTypeScriptTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string}>
+     * The `@` alias resolves through the `paths` of tests/typescript/tsconfig.json.
+     *
+     * @return iterable<string, array{string, array<string, string>}>
      */
     public static function clients(): iterable
     {
-        yield 'axios' => ['axios'];
-        yield 'fetch' => ['fetch'];
+        yield 'axios' => ['axios', []];
+        yield 'fetch' => ['fetch', []];
+        yield 'axios, imported through an alias' => ['axios', ['@' => dirname(__DIR__).'/typescript']];
+        yield 'fetch, imported through an alias' => ['fetch', ['@' => dirname(__DIR__).'/typescript']];
     }
 
+    /**
+     * @param  array<string, string>  $aliases
+     */
     #[DataProvider('clients')]
-    public function test_the_generated_files_compile_to_the_expected_types(string $client): void
+    public function test_the_generated_files_compile_to_the_expected_types(string $client, array $aliases): void
     {
-        config(['stoli.client' => $client]);
+        config(['stoli.client' => $client, 'stoli.import_aliases' => $aliases]);
         self::forgetResolved();
 
         self::create(Publisher::class)->publish();
 
         foreach (['index.d.ts', 'stoli.ts', "stoli-{$client}.ts", 'api.ts', 'api.urls.ts', 'router.ts', 'constants.ts'] as $file) {
             self::assertFileExists(self::build()."/{$file}");
+        }
+
+        if ($aliases !== []) {
+            self::assertStringContainsString("from '@/build/stoli-{$client}'", (string) file_get_contents(self::build().'/router.ts'));
         }
 
         $tsc = self::PROJECT.'/node_modules/.bin/tsc';

@@ -7,9 +7,9 @@ namespace StubbeDev\LaravelStoli\Exporters;
 use StubbeDev\LaravelStoli\Generation\GeneratedFile;
 use StubbeDev\LaravelStoli\Generation\Generation;
 use StubbeDev\LaravelStoli\Generation\Removal;
+use StubbeDev\LaravelStoli\ImportAliases;
 use StubbeDev\LaravelStoli\Items\File;
 use StubbeDev\LaravelStoli\StoliConfig;
-use StubbeDev\LaravelStoli\Utils;
 
 use function Illuminate\Filesystem\join_paths;
 
@@ -28,13 +28,14 @@ final readonly class RouterExporter
     public function generate(array $files): Generation
     {
         $client = $this->config->client();
+        $aliases = $this->config->importAliases();
         $routed = array_values(array_filter($files, static fn (File $file): bool => ! $file->standalone));
         $generated = [];
         $removals = [];
 
         if ($client !== null) {
             foreach ($routed as $file) {
-                $generated[] = new GeneratedFile(self::path($file, count($routed) > 1), self::router($file, $client->module()));
+                $generated[] = new GeneratedFile(self::path($file, count($routed) > 1), self::router($file, $client->module(), $aliases));
             }
         }
 
@@ -51,13 +52,14 @@ final readonly class RouterExporter
         return join_paths($file->directory, $named ? "{$file->name}.router.ts" : 'router.ts');
     }
 
-    private static function router(File $file, string $module): string
+    private static function router(File $file, string $module, ImportAliases $aliases): string
     {
-        $client = Utils::relativeImportPath(Utils::absolutePath($file->directory), join_paths(Utils::absolutePath($file->runtime), $module));
+        $client = $aliases->importPath($file->directory, join_paths($file->runtime, $module));
+        $routes = $aliases->importPath($file->directory, $file->path());
 
         return <<<TS
         import { createRouter } from '{$client}';
-        import routes from './{$file->name}';
+        import routes from '{$routes}';
 
         export const Stoli = createRouter(routes);
 

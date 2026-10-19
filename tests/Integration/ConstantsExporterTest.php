@@ -100,6 +100,18 @@ final class ConstantsExporterTest extends TestCase
         );
     }
 
+    public function test_an_enum_carrying_the_attribute_is_written_as_its_case_values(): void
+    {
+        self::apply(self::create(ConstantsExporter::class)->generate());
+
+        $content = (new Filesystem)->get(self::generatedFile());
+
+        $this->assertStringContainsString("Status: {\n", $content);
+        $this->assertStringContainsString("Draft: 'draft',", $content);
+        $this->assertStringContainsString("Live: 'live',", $content);
+        $this->assertStringNotContainsString('Phase', $content);
+    }
+
     public function test_an_unchanged_file_is_not_rewritten(): void
     {
         $exporter = self::create(ConstantsExporter::class);

@@ -213,7 +213,24 @@ const granted: Permission = "edit"; // 'view' | 'edit'
 
 Public constants declared on the class itself are exported: scalars, arrays, enum cases (as
 their value or name) and `JsonSerializable` values. Classes with spatie's `#[TypeScript]` are
-picked up too, unless `constants.attributes` says otherwise; enums are left to the transformer.
+picked up too, unless `constants.attributes` says otherwise.
+
+The transformer already gives every enum a union type of its cases. An enum that also carries
+`#[TypeScriptConstants]` gets its cases published as values, so frontend code can name a case
+rather than retype its string; an enum found only through another attribute is left alone.
+
+```php
+#[TypeScriptConstants]
+enum Status: string
+{
+    case Draft = 'draft';
+    case Live = 'live';
+}
+```
+
+```typescript
+App.Support.Status.Draft; // 'draft'
+```
 
 ## Route service
 

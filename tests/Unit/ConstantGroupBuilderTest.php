@@ -47,12 +47,24 @@ final class ConstantGroupBuilderTest extends TestCase
         $this->assertArrayNotHasKey(\StubbeDev\LaravelStoli\Tests\Fixtures\Constants\Untagged::class, $groups);
     }
 
-    public function test_enums_are_left_to_the_typescript_transformer(): void
+    public function test_an_enum_carrying_the_attribute_publishes_its_cases(): void
     {
-        $this->assertArrayNotHasKey(
-            \StubbeDev\LaravelStoli\Tests\Fixtures\Constants\Status::class,
-            $this->discover()
+        $group = $this->discover()[\StubbeDev\LaravelStoli\Tests\Fixtures\Constants\Status::class];
+
+        $this->assertSame(
+            [
+                'Draft' => \StubbeDev\LaravelStoli\Tests\Fixtures\Constants\Status::Draft,
+                'Live' => \StubbeDev\LaravelStoli\Tests\Fixtures\Constants\Status::Live,
+            ],
+            $group->constants
         );
+    }
+
+    public function test_an_enum_found_through_another_attribute_is_left_to_the_typescript_transformer(): void
+    {
+        $groups = $this->discover(['attributes' => [TypeScriptConstants::class, \Spatie\TypeScriptTransformer\Attributes\TypeScript::class]]);
+
+        $this->assertArrayNotHasKey(\StubbeDev\LaravelStoli\Tests\Fixtures\Constants\Phase::class, $groups);
     }
 
     public function test_only_public_constants_are_collected(): void

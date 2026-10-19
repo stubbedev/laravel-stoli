@@ -7,8 +7,8 @@ namespace StubbeDev\LaravelStoli\Tests\Fixtures\Constants;
 use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
 
 /**
- * Enums are transformed by spatie/typescript-transformer, so the discoverer
- * must leave them alone even when they carry the attribute.
+ * An enum that asks for its cases as values on top of the union type
+ * spatie/typescript-transformer gives it.
  */
 #[TypeScriptConstants]
 enum Status: string

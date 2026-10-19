@@ -6,6 +6,7 @@ namespace StubbeDev\LaravelStoli;
 
 use ReflectionClass;
 use Spatie\StructureDiscoverer\Discover;
+use Spatie\StructureDiscoverer\Enums\DiscoveredStructureType;
 use StubbeDev\LaravelStoli\Attributes\TypeScriptConstants;
 use StubbeDev\LaravelStoli\Compilers\TypeScript;
 use StubbeDev\LaravelStoli\Items\ConstantGroup;
@@ -41,7 +42,7 @@ final readonly class ConstantGroupBuilder
 
         try {
             $classes = Discover::in(...$paths)
-                ->classes()
+                ->types(DiscoveredStructureType::ClassDefinition, DiscoveredStructureType::Enum)
                 ->withAttribute(...$attributes)
                 ->get();
         } catch (Throwable $error) {
@@ -79,8 +80,10 @@ final readonly class ConstantGroupBuilder
 
         $reflection = new ReflectionClass($class);
 
-        // Enum cases are already exported as types by the typescript-transformer.
-        if ($reflection->isEnum()) {
+        // The typescript-transformer already exports every enum's cases as a union type. Only an
+        // enum carrying this package's own attribute also has them published as values, so
+        // frontend code can name a case instead of retyping its string.
+        if ($reflection->isEnum() && $reflection->getAttributes(TypeScriptConstants::class) === []) {
             return null;
         }
 

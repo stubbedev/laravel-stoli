@@ -8,6 +8,8 @@ ARG NODE_VERSION=22
 
 FROM node:${NODE_VERSION}-slim AS node
 
+RUN npm install --global --no-audit --no-fund --loglevel=error npm@11.19.1
+
 FROM php:${PHP_VERSION}-cli
 
 ARG LARAVEL_VERSION=12
@@ -32,7 +34,7 @@ RUN composer create-project "laravel/laravel:^${LARAVEL_VERSION}.0" . --no-scrip
     && cp .env.example .env \
     && sed -i 's#^APP_URL=.*#APP_URL=http://127.0.0.1:8000#; s#^SESSION_DRIVER=.*#SESSION_DRIVER=array#; s#^CACHE_STORE=.*#CACHE_STORE=array#' .env \
     && php artisan key:generate \
-    && npm install --no-audit --no-fund --silent prettier@3 chokidar@3 axios@1
+    && npm install --no-audit --no-fund --loglevel=error prettier@3 chokidar@3 axios@1
 
 COPY composer.json /package/composer.json
 COPY src /package/src
@@ -48,7 +50,7 @@ COPY e2e/patch.php /tmp/patch.php
 RUN php /tmp/patch.php
 
 COPY e2e/ts /app/e2e-ts
-RUN cd e2e-ts && npm install --no-audit --no-fund --silent && npm install --no-audit --no-fund --silent "typescript@${TYPESCRIPT_VERSION}"
+RUN cd e2e-ts && npm install --no-audit --no-fund --loglevel=error && npm install --no-audit --no-fund --loglevel=error "typescript@${TYPESCRIPT_VERSION}"
 
 COPY e2e/run.sh /run.sh
 

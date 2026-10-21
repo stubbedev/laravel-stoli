@@ -10,3 +10,7 @@ tests/api.json
 .cache
 /e2e/ts/node_modules/
 /e2e/ts/dist/
+
+# nix
+/.direnv/
+/result

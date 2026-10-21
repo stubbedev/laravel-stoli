@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
     name: PHP ${{ matrix.php }}, Laravel ${{ matrix.laravel }}, Node ${{ matrix.node }}, TypeScript ${{ matrix.typescript }}

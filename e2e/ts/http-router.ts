@@ -30,6 +30,9 @@ async function failure(request: Promise<unknown>): Promise<unknown> {
 }
 
 async function main(): Promise<void> {
+	const settled: string[] = [];
+	const removeHooks = Stoli.hooks({ onSettled: ({ name, method }) => void settled.push(`${method} ${name}`) });
+
 	const shown = await Stoli.get('users.show', { user: 5 });
 	assert.strictEqual(shown.status, 200);
 	assert.deepStrictEqual(shown.data, { id: 5, name: 'user 5' });
@@ -61,6 +64,10 @@ async function main(): Promise<void> {
 	assert.ok(invalid.errors['shipping.street_name'], 'reported under the input name');
 	assert.ok(invalid.errors['lines.0.sku'], 'reported under the item path');
 	assert.ok(invalid.errors.password, 'the confirmation is checked');
+
+	let caught: unknown;
+	await failure(Stoli.post('orders.store', { ...order, shipping: { city: 'x' } } as never, { hooks: { onError: ({ error }) => void (caught = error) } }));
+	assert.ok(Stoli.validationErrors('orders.store', caught)?.errors['shipping.street_name'], 'a call hook sees the failed validation');
 
 	const category = await Stoli.post('categories.store', { name: 'a', children: [{ name: 'b', children: [{ name: 'c' }] }] });
 	assert.strictEqual(category.data.children[0]?.children[0]?.name, 'c');
@@ -105,6 +112,12 @@ async function main(): Promise<void> {
 	const removed = await Stoli.delete('cart.remove', { product: 1 });
 	assert.strictEqual(removed.status, 200);
 	assert.ok(removed.data === undefined || removed.data === '', 'an empty body');
+
+	assert.deepStrictEqual(settled.slice(0, 3), ['get users.show', 'post users.store', 'put users.update']);
+	assert.strictEqual(settled.at(-1), 'delete cart.remove');
+	removeHooks();
+	await Stoli.get('users.show', { user: 5 });
+	assert.strictEqual(settled.at(-1), 'delete cart.remove', 'removed hooks no longer run');
 
 	console.log('http: router ok');
 }

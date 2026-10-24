@@ -196,6 +196,106 @@ assert.strictEqual(sent.at(-1).data.get('_method'), 'PATCH');
 await viaAxios.post('users.show', { user: 1, name: 'x' });
 assert.strictEqual(sent.at(-1).data, '{"name":"x"}');
 
+// Hooks behave alike on both routers: $succeeding responds 200, $failing fails, $transport
+// is the options the last request went out with
+const checkHooks = async (succeeding, failing, transport) => {
+	const log = [];
+	const watch = (label) => ({
+		onSuccess: ({ name, response }) => {
+			log.push(`${label} success ${name} ${response.status}`);
+		},
+		onError: ({ name, error }) => {
+			log.push(`${label} error ${name} ${error === undefined ? '' : 'error'}`);
+		},
+		onSettled: ({ method }) => {
+			log.push(`${label} settled ${method}`);
+		},
+	});
+
+	// The router's hooks in the order registered, then the call's own, with the call at hand
+	const removeFirst = succeeding.hooks(watch('a'));
+	succeeding.hooks(watch('b'));
+	let succeeded;
+	const response = await succeeding.get('users.show', { user: 1 }, { hooks: { ...watch('call'), onSuccess: (event) => void (succeeded = event) } });
+	assert.deepStrictEqual(response.data, { id: 1 });
+	assert.deepStrictEqual(succeeded, { name: 'users.show', method: 'get', params: { user: 1 }, response });
+	assert.strictEqual(succeeded.response, response, 'the response the call resolves to');
+	assert.deepStrictEqual(log.splice(0), ['a success users.show 200', 'b success users.show 200', 'a settled get', 'b settled get', 'call settled get']);
+	assert.strictEqual('hooks' in transport(), false, 'the hooks are not sent');
+
+	// Removing hooks is idempotent and leaves the others in place
+	removeFirst();
+	removeFirst();
+	await succeeding.get('users.show', { user: 1 });
+	assert.deepStrictEqual(log.splice(0), ['b success users.show 200', 'b settled get']);
+
+	// The same hooks registered twice run twice, and are removed one registration at a time
+	const twice = watch('c');
+	const removeOnce = succeeding.hooks(twice);
+	succeeding.hooks(twice);
+	removeOnce();
+	await succeeding.get('users.show', { user: 1 });
+	assert.deepStrictEqual(log.splice(0), ['b success users.show 200', 'c success users.show 200', 'b settled get', 'c settled get']);
+
+	// A failed call runs onError and onSettled, and still rejects with its own error
+	failing.hooks(watch('a'));
+	let failure;
+	await assert.rejects(failing.post('users.show', { user: 1 }, { hooks: { onError: ({ error }) => void (failure = error) } }), (error) => error === failure);
+	assert.deepStrictEqual(log.splice(0), ['a error users.show error', 'a settled post']);
+
+	// So does a call that cannot be made at all
+	await assert.rejects(failing.get('users.show', {}), /Missing required parameter "user"/);
+	assert.deepStrictEqual(log.splice(0), ['a error users.show error', 'a settled get']);
+
+	// A hook returning a promise is awaited before the next and before the call resolves
+	await succeeding.get('users.show', { user: 1 }, {
+		hooks: {
+			onSuccess: () => new Promise((resolve) => setTimeout(() => resolve(log.push('slow')), 5)),
+			onSettled: () => void log.push('after'),
+		},
+	});
+	assert.deepStrictEqual(log.splice(0), ['b success users.show 200', 'c success users.show 200', 'slow', 'b settled get', 'c settled get', 'after']);
+
+	// A hook that throws rejects the call with what it threw, and onSettled still runs
+	const thrown = new Error('hook failed');
+	await assert.rejects(
+		succeeding.get('users.show', { user: 1 }, {
+			hooks: {
+				onSuccess: () => {
+					throw thrown;
+				},
+				onSettled: () => void log.push('settled ran'),
+			},
+		}),
+		(error) => error === thrown,
+	);
+	assert.strictEqual(log.splice(0).at(-1), 'settled ran');
+};
+
+// Hooks registered while a call is in flight wait for the next call
+let late;
+const registering = createRouter(routes, {
+	fetch: async () => {
+		registering.hooks({ onSuccess: () => void (late = 'ran') });
+		return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+	},
+});
+await registering.get('users.show', { user: 1 });
+assert.strictEqual(late, undefined);
+
+await checkHooks(createRouter(routes, { fetch: respond(200, '{"id":1}') }), createRouter(routes, { fetch: respond(500, '{"message":"x"}') }), () => calls.at(-1).init);
+await checkHooks(
+	createAxiosRouter(routes, { client }),
+	createAxiosRouter(routes, {
+		client: axios.create({
+			adapter: async (config) => {
+				throw new axios.AxiosError('failed', 'ERR_BAD_RESPONSE', config, null, { data: {}, status: 500, statusText: '', headers: {}, config });
+			},
+		}),
+	}),
+	() => sent.at(-1),
+);
+
 // The per-route URL functions build on url(), which setRootUrl() points elsewhere
 const show = { uri: 'users/{user}', host: 'https://app.test' };
 assert.strictEqual(url('users.show', show, { user: 1, q: 'x' }), 'https://app.test/users/1?q=x');

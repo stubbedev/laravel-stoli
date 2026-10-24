@@ -1,11 +1,14 @@
 import {
+	hookRegistry,
 	isValidationErrors,
 	requester,
 	serializeQuery,
+	withHooks,
 	type Arguments,
 	type Method,
 	type NamesFor,
 	type RouteDefinitions,
+	type RouteHooks,
 	type RouteMap,
 	type RouteName,
 	type ValidationErrors,
@@ -35,12 +38,27 @@ export class StoliHttpError extends Error {
 }
 
 /**
+ * The response of each route.
+ */
+type Responses<R extends RouteDefinitions> = { [N in RouteName<R>]: StoliResponse<R[N]['response'], R[N]['status']> };
+
+/**
+ * Hooks on the calls to the routes $N, see Router.hooks and RequestOptions.
+ */
+export type RouterHooks<R extends RouteDefinitions, N extends RouteName<R> = RouteName<R>> = RouteHooks<R, Responses<R>, N>;
+
+/**
+ * The options of one call: fetch's, and hooks run after the router's.
+ */
+export type RequestOptions<R extends RouteDefinitions, N extends RouteName<R>> = RequestInit & { hooks?: RouterHooks<R, N> };
+
+/**
  * One HTTP method of the router: only the routes answering to it, with their
  * parameters (or, for $Extra, a raw FormData), their response and its status.
  */
 export type RouterMethod<R extends RouteDefinitions, M extends Method, Extra = never> = <N extends NamesFor<R, M>>(
 	name: N,
-	...args: Arguments<R[N]['params'] | Extra, [init?: RequestInit]>
+	...args: Arguments<R[N]['params'] | Extra, [options?: RequestOptions<R, N>]>
 ) => Promise<StoliResponse<R[N]['response'], R[N]['status']>>;
 
 export interface Router<R extends RouteDefinitions> {
@@ -54,6 +72,11 @@ export interface Router<R extends RouteDefinitions> {
 	 * route's parameters; null when $error is not a failed validation.
 	 */
 	validationErrors<N extends RouteName<R>>(name: N, error: unknown): ValidationErrors<R[N]['params']> | null;
+	/**
+	 * Run $hooks on every call from now on, before the call's own; returns the function
+	 * that removes them again.
+	 */
+	hooks(hooks: RouterHooks<R>): () => void;
 }
 
 export interface RouterConfig {
@@ -78,48 +101,61 @@ export function createRouter<R extends RouteDefinitions>(
 	{ rootUrl = null, fetch: send = globalThis.fetch.bind(globalThis), init: defaults = {} }: RouterConfig = {},
 ): Router<R> {
 	const prepare = requester({ routes: routes as RouteMap, rootUrl });
+	const registry = hookRegistry<RouterHooks<RouteDefinitions>>();
+
+	const perform = async (
+		method: Method,
+		name: string,
+		params: object | FormData | undefined,
+		init: RequestInit,
+	): Promise<StoliResponse<unknown>> => {
+		const request = prepare(method, name, params);
+		const query = serializeQuery(request.query);
+		const url = query === '' ? request.url : `${request.url}?${query}`;
+		const headers = new Headers(defaults.headers);
+
+		new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+		headers.set('Accept', headers.get('Accept') ?? 'application/json');
+		headers.set('X-Requested-With', headers.get('X-Requested-With') ?? 'XMLHttpRequest');
+
+		const xsrf = xsrfToken(url);
+
+		if (xsrf !== null && !headers.has('X-XSRF-TOKEN')) {
+			headers.set('X-XSRF-TOKEN', xsrf);
+		}
+
+		let body: BodyInit | null = null;
+
+		if (request.body instanceof FormData) {
+			body = request.body;
+		} else if (request.body !== null) {
+			body = JSON.stringify(request.body);
+			headers.set('Content-Type', 'application/json');
+		}
+
+		const response = await send(url, { ...defaults, ...init, method: request.method.toUpperCase(), headers, body });
+		const result: StoliResponse<unknown> = {
+			data: await read(response),
+			status: response.status,
+			headers: response.headers,
+			response,
+		};
+
+		if (!response.ok) {
+			throw new StoliHttpError(result);
+		}
+
+		return result;
+	};
 
 	const call =
 		(method: Method) =>
-		async (name: string, params?: object | FormData, init: RequestInit = {}): Promise<StoliResponse<unknown>> => {
-			const request = prepare(method, name, params);
-			const query = serializeQuery(request.query);
-			const url = query === '' ? request.url : `${request.url}?${query}`;
-			const headers = new Headers(defaults.headers);
-
-			new Headers(init.headers).forEach((value, key) => headers.set(key, value));
-			headers.set('Accept', headers.get('Accept') ?? 'application/json');
-			headers.set('X-Requested-With', headers.get('X-Requested-With') ?? 'XMLHttpRequest');
-
-			const xsrf = xsrfToken(url);
-
-			if (xsrf !== null && !headers.has('X-XSRF-TOKEN')) {
-				headers.set('X-XSRF-TOKEN', xsrf);
-			}
-
-			let body: BodyInit | null = null;
-
-			if (request.body instanceof FormData) {
-				body = request.body;
-			} else if (request.body !== null) {
-				body = JSON.stringify(request.body);
-				headers.set('Content-Type', 'application/json');
-			}
-
-			const response = await send(url, { ...defaults, ...init, method: request.method.toUpperCase(), headers, body });
-			const result: StoliResponse<unknown> = {
-				data: await read(response),
-				status: response.status,
-				headers: response.headers,
-				response,
-			};
-
-			if (!response.ok) {
-				throw new StoliHttpError(result);
-			}
-
-			return result;
-		};
+		(name: string, params?: object | FormData, { hooks, ...init }: RequestOptions<RouteDefinitions, string> = {}) =>
+			withHooks(
+				() => perform(method, name, params, init),
+				hooks === undefined ? registry.current() : [...registry.current(), hooks],
+				{ name, method, params },
+			);
 
 	return {
 		get: call('get'),
@@ -131,6 +167,7 @@ export function createRouter<R extends RouteDefinitions>(
 			error instanceof StoliHttpError && error.response.status === 422 && isValidationErrors(error.response.data)
 				? error.response.data
 				: null,
+		hooks: registry.add,
 	} as Router<R>;
 }
 

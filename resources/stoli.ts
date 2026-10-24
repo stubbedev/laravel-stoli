@@ -329,6 +329,98 @@ export function requester(config: StoliConfig): (method: Method, name: string, p
 }
 
 /**
+ * The router call a hook is told about: the route, the HTTP method it was called with
+ * and the parameters it was given. Checking the name narrows the parameters.
+ */
+export type RequestContext<R extends RouteDefinitions, N extends RouteName<R> = RouteName<R>> = {
+	[K in N]: { name: K; method: Method; params: R[K]['params'] | FormData | undefined };
+}[N];
+
+/**
+ * Callbacks that watch router calls: `onSuccess` with the response of a call that
+ * succeeded, `onError` with the error of one that failed, and `onSettled` after either.
+ * They only observe: the call still resolves to its response or rejects with its error.
+ * A callback returning a promise is awaited before the next, and one that throws rejects
+ * the call with what it threw.
+ */
+export interface Hooks<Settled, Succeeded, Failed> {
+	onSuccess?: (event: Succeeded) => void | Promise<void>;
+	onError?: (event: Failed) => void | Promise<void>;
+	onSettled?: (event: Settled) => void | Promise<void>;
+}
+
+/**
+ * Hooks on the calls to the routes $N, given each route's response as a router's
+ * $Responses has it. Checking the name narrows the parameters and the response.
+ */
+export type RouteHooks<
+	R extends RouteDefinitions,
+	Responses extends { [K in RouteName<R>]: unknown },
+	N extends RouteName<R> = RouteName<R>,
+> = Hooks<
+	RequestContext<R, N>,
+	{ [K in N]: RequestContext<R, K> & { response: Responses[K] } }[N],
+	RequestContext<R, N> & { error: unknown }
+>;
+
+/**
+ * The hooks registered on a router. A call runs the ones registered when it starts, in
+ * the order they were registered.
+ */
+export function hookRegistry<H>(): { add(hooks: H): () => void; current(): readonly H[] } {
+	let registered: ReadonlyArray<{ hooks: H }> = [];
+
+	return {
+		add(hooks) {
+			const entry = { hooks };
+			registered = [...registered, entry];
+
+			return () => {
+				registered = registered.filter((other) => other !== entry);
+			};
+		},
+		current: () => registered.map(({ hooks }) => hooks),
+	};
+}
+
+/**
+ * Make a request, telling each of $hooks in turn how it went.
+ */
+export async function withHooks<Response, Context extends object>(
+	send: () => Promise<Response>,
+	hooks: readonly Hooks<Context, Context & { response: Response }, Context & { error: unknown }>[],
+	context: Context,
+): Promise<Response> {
+	try {
+		let response: Response;
+
+		try {
+			response = await send();
+		} catch (error) {
+			const failed = { ...context, error };
+
+			for (const hook of hooks) {
+				await hook.onError?.(failed);
+			}
+
+			throw error;
+		}
+
+		const succeeded = { ...context, response };
+
+		for (const hook of hooks) {
+			await hook.onSuccess?.(succeeded);
+		}
+
+		return response;
+	} finally {
+		for (const hook of hooks) {
+			await hook.onSettled?.(context);
+		}
+	}
+}
+
+/**
  * A body holding a File or Blob anywhere has to go out as multipart. It is flattened the
  * way PHP reads it back, so nested fields and booleans arrive as Laravel expects them.
  */

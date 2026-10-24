@@ -180,6 +180,31 @@ way PHP reads it back (`meta[tags][]`, booleans as `1`/`0`), and a `put` or `pat
 files is sent as a `POST` with `_method`, since PHP only parses multipart on `POST`. A raw
 `FormData` works too; route parameters are read from it and stripped from the body.
 
+**Hooks** watch requests on either client: `onSuccess` is told about a call that succeeded,
+`onError` about one that failed, and `onSettled` runs after either. Register them once on the
+router, and give a call its own in its options; the router's run first, in the order they were
+registered. Each gets the call as an event, typed per route: checking `name` narrows `params`
+and `response` to that route's.
+
+```typescript
+const removeHooks = Stoli.hooks({
+	onSuccess: (event) => {
+		if (event.name === "users.store") {
+			toast(`Created ${event.response.data.name}`); // UserData
+		}
+	},
+	onError: ({ name, error }) => report(name, error),
+	onSettled: ({ name, method }) => spinner.stop(`${method} ${name}`),
+});
+
+await Stoli.post("orders.store", form, {
+	hooks: { onError: ({ error }) => showErrors(Stoli.validationErrors("orders.store", error)) },
+});
+```
+
+Hooks only observe: the call still resolves to its response or rejects with its error. One
+returning a promise is awaited before the next, and one that throws rejects the call.
+
 ## URL functions
 
 With `'urls' => true`, `api.urls.ts` exports one typed function per route, which a bundler drops

@@ -18,6 +18,7 @@ use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\ConstTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\NameNode;
 use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
@@ -364,7 +365,7 @@ final class SpatieDataTypeResolver
     {
         return match (true) {
             $node instanceof IdentifierTypeNode => $this->named($node->name, [], $context),
-            $node instanceof GenericTypeNode => $this->named($node->type->name, array_values($node->genericTypes), $context),
+            $node instanceof GenericTypeNode => $this->named(self::writtenName($node->type), array_values($node->genericTypes), $context),
             $node instanceof NullableTypeNode => $this->union([$node->type, new IdentifierTypeNode('null')], $context),
             $node instanceof UnionTypeNode => $this->union(array_values($node->types), $context),
             $node instanceof ArrayTypeNode => $this->type($node->type, $context)?->list(),
@@ -525,11 +526,16 @@ final class SpatieDataTypeResolver
     {
         $name = match (true) {
             $node instanceof IdentifierTypeNode => $node->name,
-            $node instanceof GenericTypeNode => $node->type->name,
+            $node instanceof GenericTypeNode => self::writtenName($node->type),
             default => null,
         };
 
         return $name === null ? null : $this->resolveClass($name, $context);
+    }
+
+    private static function writtenName(IdentifierTypeNode|NameNode $node): string
+    {
+        return $node instanceof NameNode ? $node->toCodeString() : $node->name;
     }
 
     /**

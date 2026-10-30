@@ -249,6 +249,59 @@ async function router(): Promise<void> {
 
 	await Stoli.put('profile.update', { display_name: 'x', email: 'x' });
 	await Stoli.get('statuses.show', { status: 'active', page: 2 });
+
+	// The router's hooks see every route: the name narrows the parameters and the response
+	const removeHooks = Stoli.hooks({
+		onSuccess: (event) => {
+			expectType<Equal<typeof event.name, ApiRouteName>>();
+
+			if (event.name === 'users.show') {
+				expectType<Equal<typeof event.params, ApiRouteParams['users.show'] | FormData | undefined>>();
+				expectType<Equal<typeof event.response.data, User>>();
+				expectType<Equal<typeof event.response.status, 200>>();
+			}
+
+			if (event.name === 'users.store') {
+				expectType<Equal<typeof event.response.status, 201>>();
+			}
+		},
+		onError: (event) => {
+			expectType<Equal<typeof event.error, unknown>>();
+
+			if (event.name === 'orders.store') {
+				const failed = Stoli.validationErrors(event.name, event.error);
+				expectType<Equal<NonNullable<typeof failed>['errors']['lines.0.sku'], string[] | undefined>>();
+			}
+		},
+		onSettled: async ({ name }) => {
+			expectType<Equal<typeof name, ApiRouteName>>();
+		},
+	});
+	expectType<Equal<typeof removeHooks, () => void>>();
+
+	// A call's own hooks know its route
+	await Stoli.get('users.show', { user: 1 }, {
+		headers: { 'X-Test': '1' },
+		hooks: {
+			onSuccess: ({ name, params, response }) => {
+				expectType<Equal<typeof name, 'users.show'>>();
+				expectType<Equal<typeof params, ApiRouteParams['users.show'] | FormData | undefined>>();
+				expectType<Equal<typeof response.data, User>>();
+				expectType<Equal<typeof response.status, 200>>();
+			},
+		},
+	});
+
+	// @ts-expect-error a hooks object is not a thenable: then is not a hook
+	Stoli.hooks({ then: () => {} });
+	// @ts-expect-error a call's hook is given the response of its route
+	await Stoli.get('users.show', { user: 1 }, { hooks: { onSuccess: (event: { response: { data: string } }) => void event } });
+	Stoli.hooks({
+		onSuccess: (event) => {
+			// @ts-expect-error a router hook has to narrow the route before relying on its response
+			expectType<Equal<typeof event.response.data, User>>();
+		},
+	});
 }
 
 // Constants keep their literal values

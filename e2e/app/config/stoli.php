@@ -9,6 +9,7 @@ return [
     'transform' => env('E2E_MODE', 'transform') === 'transform',
     'client' => env('E2E_CLIENT', 'fetch') === 'none' ? null : env('E2E_CLIENT', 'fetch'),
     'urls' => env('E2E_URLS', true) === true,
+    'query' => env('E2E_QUERY', 'none') === 'none' ? null : env('E2E_QUERY'),
     'constants' => ['enabled' => true, 'attributes' => [StubbeDev\LaravelStoli\Attributes\TypeScriptConstants::class]],
     'single' => ['name' => 'api'],
     'modules' => [

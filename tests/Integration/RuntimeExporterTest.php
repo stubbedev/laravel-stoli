@@ -45,9 +45,9 @@ final class RuntimeExporterTest extends TestCase
         parent::tearDown();
     }
 
-    private function publish(?string $client = null): void
+    private function publish(?string $client = null, ?string $query = null): void
     {
-        config(['stoli.client' => $client]);
+        config(['stoli.client' => $client, 'stoli.query' => $query]);
         self::forgetResolved();
 
         self::apply(self::create(RuntimeExporter::class)->generate(self::create(FileRouteBuilder::class)->files()));
@@ -79,6 +79,18 @@ final class RuntimeExporterTest extends TestCase
 
         self::assertFileDoesNotExist(self::tmp().'/stoli-fetch.ts');
         self::assertFileExists(self::tmp().'/stoli.ts');
+    }
+
+    public function test_it_writes_the_module_of_the_query_library_and_removes_it_when_no_longer_configured(): void
+    {
+        $this->publish('fetch', 'tanstack');
+
+        self::assertStringEqualsFile(self::tmp().'/stoli-tanstack.ts', self::resource('stoli-tanstack.ts'));
+
+        $this->publish('fetch');
+
+        self::assertFileDoesNotExist(self::tmp().'/stoli-tanstack.ts');
+        self::assertFileExists(self::tmp().'/stoli-fetch.ts');
     }
 
     public function test_the_axios_switch_of_earlier_versions_still_picks_axios(): void

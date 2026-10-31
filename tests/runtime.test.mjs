@@ -33,6 +33,8 @@ const { RouteService, createRoute, serializeQuery, flattenParameters, requester,
 const { createRouter, StoliHttpError } = await load('stoli-fetch');
 const { createRouter: createAxiosRouter } = await load('stoli-axios');
 const { default: axios } = await import(axiosUrl);
+const { createQueries } = await load('stoli-tanstack');
+const { QueryClient } = await import(pathToFileURL(dependencies.resolve('@tanstack/query-core')).href);
 
 const routes = {
 	'users.show': { uri: 'users/{user}', host: null },
@@ -341,4 +343,52 @@ try {
 
 assert.strictEqual(createAxiosRouter(routes).validationErrors('users.show', new Error('x')), null);
 
-console.log('resources/stoli.ts, resources/stoli-fetch.ts, resources/stoli-axios.ts: ok');
+// Query keys are the route name split on dots, behind the namespace, followed by the parameters
+const queried = [];
+const queryRouter = createRouter(routes, {
+	fetch: async (url, init) => {
+		queried.push({ url, init });
+		return new Response('{"id":1}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+	},
+});
+const { stoliQuery, stoliKey } = createQueries(queryRouter.get, []);
+assert.deepStrictEqual(stoliQuery('users.show', { user: 1 }).queryKey, ['users', 'show', { user: 1 }]);
+assert.deepStrictEqual(stoliQuery('search').queryKey, ['search', {}]);
+assert.deepStrictEqual(stoliKey('users'), ['users']);
+assert.deepStrictEqual(stoliKey('users.show', { user: 1 }), ['users', 'show', { user: 1 }]);
+assert.deepStrictEqual(createQueries(queryRouter.get, ['admin']).stoliKey('users.show', { user: 1 }), ['admin', 'users', 'show', { user: 1 }]);
+
+const queryClient = new QueryClient();
+assert.deepStrictEqual(await queryClient.fetchQuery(stoliQuery('users.show', { user: 1, q: 'x' })), { id: 1 });
+assert.strictEqual(queried.at(-1).url, '/users/1?q=x');
+assert.strictEqual(queried.at(-1).init.method, 'GET');
+assert.ok(queried.at(-1).init.signal instanceof AbortSignal, 'the query signal is passed to the request');
+assert.deepStrictEqual(queryClient.getQueryData(stoliKey('users.show', { q: 'x', user: 1 })), { id: 1 });
+
+await queryClient.invalidateQueries({ queryKey: stoliKey('users') });
+assert.strictEqual(queryClient.getQueryState(stoliKey('users.show', { user: 1, q: 'x' })).isInvalidated, true);
+
+let aborted = null;
+const hanging = createQueries(
+	createRouter(routes, {
+		fetch: (_url, init) =>
+			new Promise((_resolve, reject) => {
+				init.signal.addEventListener('abort', () => {
+					aborted = init.signal.aborted;
+					reject(init.signal.reason);
+				});
+			}),
+	}).get,
+	[],
+);
+const pending = queryClient.fetchQuery(hanging.stoliQuery('posts.index'));
+await new Promise((resolve) => setTimeout(resolve, 0));
+await queryClient.cancelQueries({ queryKey: hanging.stoliKey('posts') });
+await assert.rejects(pending);
+assert.strictEqual(aborted, true, 'cancelling the query aborts the request');
+
+const axiosQueries = createQueries(viaAxios.get, []);
+assert.deepStrictEqual(await queryClient.fetchQuery(axiosQueries.stoliQuery('files.show', { path: 'a' })), { id: 1 });
+assert.ok(sent.at(-1).signal instanceof AbortSignal, 'the axios router passes the query signal on');
+
+console.log('resources/stoli.ts, resources/stoli-fetch.ts, resources/stoli-axios.ts, resources/stoli-tanstack.ts: ok');

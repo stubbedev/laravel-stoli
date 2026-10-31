@@ -64,6 +64,19 @@ final readonly class StoliConfig
         return (is_string($client) ? Client::tryFrom($client) : null) ?? throw StoliException::invalidClient($client);
     }
 
+    public function query(): ?Query
+    {
+        $query = $this->config['query'] ?? null;
+
+        if ($query === null || $query === false) {
+            return null;
+        }
+
+        $query = (is_string($query) ? Query::tryFrom($query) : null) ?? throw StoliException::invalidQuery($query);
+
+        return $this->client() === null ? throw StoliException::queryWithoutClient($query) : $query;
+    }
+
     /**
      * Whether a `<module>.urls.ts` of per-route URL functions is written next to each
      * route file.

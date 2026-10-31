@@ -66,6 +66,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Query Options
+    |--------------------------------------------------------------------------
+    |
+    | When set, a `<module>.query.ts` is written next to each router, exporting
+    | typed query options and keys per GET route for a client-side cache. The
+    | query function calls the router, so 'client' must be set too.
+    |
+    |     import { stoliKey, stoliQuery } from './api.query';
+    |     useQuery(stoliQuery('users.show', { user: 1 }));
+    |     queryClient.invalidateQueries({ queryKey: stoliKey('users') });
+    |
+    | null       - No query options.
+    | 'tanstack' - TanStack Query 5: needs @tanstack/query-core, which every
+    |              TanStack Query adapter installs.
+    |
+    */
+    'query' => null,
+
+    /*
+    |--------------------------------------------------------------------------
     | Import Aliases
     |--------------------------------------------------------------------------
     |

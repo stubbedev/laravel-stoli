@@ -3,6 +3,7 @@
 	"private": true,
 	"description": "Type-checks the TypeScript stoli:generate writes, see tests/Integration/GeneratedTypeScriptTest.php",
 	"devDependencies": {
+		"@tanstack/query-core": "^5.0.0",
 		"axios": "^1.7.0",
 		"typescript": "^5.8.0"
 	}

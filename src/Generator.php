@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StubbeDev\LaravelStoli;
 
 use StubbeDev\LaravelStoli\Exporters\ConstantsExporter;
+use StubbeDev\LaravelStoli\Exporters\QueryExporter;
 use StubbeDev\LaravelStoli\Exporters\RouterExporter;
 use StubbeDev\LaravelStoli\Exporters\RoutesFileExporter;
 use StubbeDev\LaravelStoli\Exporters\RuntimeExporter;
@@ -25,6 +26,7 @@ final readonly class Generator
         private RouterExporter $routers,
         private ConstantsExporter $constants,
         private UrlsExporter $urls,
+        private QueryExporter $queries,
     ) {}
 
     public function generate(): Generation
@@ -35,6 +37,7 @@ final readonly class Generator
             $this->routes->generate($files),
             $this->routers->generate($files),
             $this->urls->generate($files),
+            $this->queries->generate($files),
             $this->constants->generate(),
         );
     }

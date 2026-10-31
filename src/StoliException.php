@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StubbeDev\LaravelStoli;
 
+use BackedEnum;
 use RuntimeException;
 use Throwable;
 
@@ -21,9 +22,17 @@ final class StoliException extends RuntimeException
 
     public static function invalidClient(mixed $client): self
     {
-        $clients = implode(', ', array_map(static fn (Client $client): string => "'{$client->value}'", Client::cases()));
+        return self::invalidOption('client', Client::cases(), $client);
+    }
 
-        return new self('The "client" option must be one of '.$clients.' or null, got '.get_debug_type($client));
+    public static function invalidQuery(mixed $query): self
+    {
+        return self::invalidOption('query', Query::cases(), $query);
+    }
+
+    public static function queryWithoutClient(Query $query): self
+    {
+        return new self("The \"query\" option '{$query->value}' calls the router, so it needs the \"client\" option set");
     }
 
     public static function invalidImportAliases(string $reason): self
@@ -64,6 +73,16 @@ final class StoliException extends RuntimeException
     public static function cantExportRuntime(?Throwable $previous = null): self
     {
         return self::wrap('Could not export the route service', $previous);
+    }
+
+    /**
+     * @param  list<BackedEnum>  $cases
+     */
+    private static function invalidOption(string $option, array $cases, mixed $value): self
+    {
+        $values = implode(', ', array_map(static fn (BackedEnum $case): string => "'{$case->value}'", $cases));
+
+        return new self("The \"{$option}\" option must be one of {$values} or null, got ".get_debug_type($value));
     }
 
     private static function wrap(string $message, ?Throwable $previous): self

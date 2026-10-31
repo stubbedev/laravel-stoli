@@ -10,14 +10,8 @@ namespace StubbeDev\LaravelStoli;
  */
 enum Client: string
 {
+    use RuntimeModule;
+
     case Axios = 'axios';
     case Fetch = 'fetch';
-
-    /**
-     * The runtime module the router is built on, without its extension.
-     */
-    public function module(): string
-    {
-        return "stoli-{$this->value}";
-    }
 }

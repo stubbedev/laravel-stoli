@@ -115,12 +115,12 @@ final class GeneratedTypeScriptTest extends TestCase
     #[DataProvider('clients')]
     public function test_the_generated_files_compile_to_the_expected_types(string $client, array $aliases): void
     {
-        config(['stoli.client' => $client, 'stoli.import_aliases' => $aliases]);
+        config(['stoli.client' => $client, 'stoli.query' => 'tanstack', 'stoli.import_aliases' => $aliases]);
         self::forgetResolved();
 
         self::create(Publisher::class)->publish();
 
-        foreach (['index.d.ts', 'stoli.ts', "stoli-{$client}.ts", 'api.ts', 'api.urls.ts', 'router.ts', 'constants.ts'] as $file) {
+        foreach (['index.d.ts', 'stoli.ts', "stoli-{$client}.ts", 'api.ts', 'api.urls.ts', 'api.query.ts', 'stoli-tanstack.ts', 'router.ts', 'constants.ts'] as $file) {
             self::assertFileExists(self::build()."/{$file}");
         }
 

@@ -19,6 +19,8 @@ import routes, {
 	type ApiRouteResponse,
 } from './build/api';
 import { Stoli } from './build/router';
+import { stoliKey, stoliQuery } from './build/api.query';
+import { QueryClient, QueryObserver } from '@tanstack/query-core';
 import { usersShow, postsIndex, tenantDashboard } from './build/api.urls';
 import { StubbeDev as Constants } from './build/constants';
 
@@ -304,7 +306,55 @@ async function router(): Promise<void> {
 	});
 }
 
+async function queries(): Promise<void> {
+	const client = new QueryClient();
+
+	const user = await client.fetchQuery(stoliQuery('users.show', { user: 1 }));
+	expectType<Equal<typeof user, User>>();
+
+	const page = await client.fetchQuery(stoliQuery('users.paginated'));
+	expectType<Equal<typeof page.data, User[]>>();
+
+	const observer = new QueryObserver(client, stoliQuery('statuses.show', { status: 'active', page: 1 }));
+	expectType<Equal<ReturnType<typeof observer.getCurrentResult>['data'], User | undefined>>();
+
+	const options = stoliQuery('users.show', { user: 1 });
+	expectType<Equal<typeof options.queryKey[0], 'users'>>();
+	expectType<Equal<typeof options.queryKey[1], 'show'>>();
+	expectType<Equal<typeof options.queryKey[2], ApiRouteParams['users.show']>>();
+
+	const cached = client.getQueryData(stoliKey('users.show', { user: 1 }));
+	expectType<Equal<typeof cached, User | undefined>>();
+	client.setQueryData(stoliKey('users.show', { user: 1 }), user);
+
+	const prefix = stoliKey('users');
+	expectType<Equal<typeof prefix, ['users']>>();
+	const route = stoliKey('users.show');
+	expectType<Equal<typeof route, ['users', 'show']>>();
+	await client.invalidateQueries({ queryKey: stoliKey('users') });
+	await client.invalidateQueries({ queryKey: stoliKey('users.show') });
+	await client.prefetchQuery(stoliQuery('posts.index'));
+	await client.prefetchQuery(stoliQuery('posts.index', { page: 2 }));
+
+	// @ts-expect-error a POST route is no query
+	stoliQuery('users.store', { name: 'x', admin: true });
+	// @ts-expect-error a route answering with nothing is no query
+	stoliQuery('shapes.nothing');
+	// @ts-expect-error the parameters of a route that takes some are required
+	stoliQuery('users.show');
+	// @ts-expect-error the parameters are typed by the route
+	stoliQuery('users.show', { user: 'x' });
+	// @ts-expect-error a key prefix runs along whole segments of a route name
+	stoliKey('use');
+	// @ts-expect-error a key prefix is of a query route
+	stoliKey('orders');
+	// @ts-expect-error a key with parameters is of a whole route name
+	stoliKey('users', { user: 1 });
+	// @ts-expect-error cached data is typed by the route
+	client.setQueryData(stoliKey('users.show', { user: 1 }), 'x');
+}
+
 // Constants keep their literal values
 expectType<Equal<typeof Constants.LaravelStoli.Tests.Fixtures.Constants.Permission.VIEW, 'view'>>();
 
-export { router };
+export { queries, router };

@@ -12,6 +12,7 @@ use StubbeDev\LaravelStoli\Generation\Generation;
 use StubbeDev\LaravelStoli\Generation\Removal;
 use StubbeDev\LaravelStoli\ImportAliases;
 use StubbeDev\LaravelStoli\Items\File;
+use StubbeDev\LaravelStoli\Query;
 use StubbeDev\LaravelStoli\StoliConfig;
 use StubbeDev\LaravelStoli\StoliException;
 use Throwable;
@@ -19,8 +20,8 @@ use Throwable;
 use function Illuminate\Filesystem\join_paths;
 
 /**
- * The route service, stoli.ts, next to the route files that import it, with the module
- * of the configured client beside it. The module of a client no longer configured, and
+ * The route service, stoli.ts, next to the route files that import it, with the modules
+ * of the configured client and query library beside it. A module no longer configured, and
  * the stoli.js and stoli.d.ts of versions before stoli.ts, are removed.
  */
 final readonly class RuntimeExporter
@@ -49,7 +50,7 @@ final readonly class RuntimeExporter
             $this->config->defaultOutputPath(),
             ...array_map(static fn (File $file): string => $file->runtime, $files),
         ]));
-        $client = $this->config->client();
+        $selected = [$this->config->client(), $this->config->query()];
         $aliases = $this->config->importAliases();
         $generated = [];
         $removals = [];
@@ -58,8 +59,8 @@ final readonly class RuntimeExporter
             foreach ($directories as $directory) {
                 $generated[] = $this->copy($directory, self::MODULE, $aliases);
 
-                foreach (Client::cases() as $case) {
-                    if ($case === $client) {
+                foreach ([...Client::cases(), ...Query::cases()] as $case) {
+                    if (in_array($case, $selected, true)) {
                         $generated[] = $this->copy($directory, $case->module(), $aliases);
                     } else {
                         $removals[] = new Removal(join_paths($directory, "{$case->module()}.ts"));

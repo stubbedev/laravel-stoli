@@ -29,13 +29,12 @@ final readonly class RouterExporter
     {
         $client = $this->config->client();
         $aliases = $this->config->importAliases();
-        $routed = array_values(array_filter($files, static fn (File $file): bool => ! $file->standalone));
         $generated = [];
         $removals = [];
 
         if ($client !== null) {
-            foreach ($routed as $file) {
-                $generated[] = new GeneratedFile(self::path($file, count($routed) > 1), self::router($file, $client->module(), $aliases));
+            foreach (self::routed($files) as $path => $file) {
+                $generated[] = new GeneratedFile($path, self::router($file, $client->module(), $aliases));
             }
         }
 
@@ -45,6 +44,22 @@ final readonly class RouterExporter
         }
 
         return new Generation($generated, $removals);
+    }
+
+    /**
+     * @param  list<File>  $files
+     * @return array<string, File>
+     */
+    public static function routed(array $files): array
+    {
+        $routed = array_values(array_filter($files, static fn (File $file): bool => ! $file->standalone));
+        $paths = [];
+
+        foreach ($routed as $file) {
+            $paths[self::path($file, count($routed) > 1)] = $file;
+        }
+
+        return $paths;
     }
 
     private static function path(File $file, bool $named): string

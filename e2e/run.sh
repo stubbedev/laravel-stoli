@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Every e2e scenario, in the Laravel application e2e/Dockerfile builds. Each one sets
-# the writer, split, client, mode, formatter and urls options through the environment,
+# the writer, split, client, mode, formatter, urls and query options through the environment,
 # then holds what Stoli generates to:
 #
 #   1. generation: typescript:transform (and stoli:generate when it is not hooked in)
@@ -18,17 +18,17 @@ cd /app
 GENERATED=resources/js/generated
 SERVER_LOG=/tmp/serve.log
 
-# writer split client mode formatter urls
+# writer split client mode formatter urls query
 SCENARIOS=(
-    "global true fetch transform none true"
-    "global false axios generate none false"
-    "global true none generate prettier true"
-    "module true axios transform prettier true"
-    "module false fetch generate none true"
-    "module true none transform none false"
-    "flat true fetch generate prettier false"
-    "flat false axios transform none true"
-    "flat true none transform prettier true"
+    "global true fetch transform none true tanstack"
+    "global false axios generate none false none"
+    "global true none generate prettier true none"
+    "module true axios transform prettier true tanstack"
+    "module false fetch generate none true tanstack"
+    "module true none transform none false none"
+    "flat true fetch generate prettier false none"
+    "flat false axios transform none true tanstack"
+    "flat true none transform prettier true none"
 )
 
 if [[ -n "${E2E_ONLY:-}" ]]; then
@@ -77,9 +77,9 @@ for _ in $(seq 1 50); do
 done
 
 for scenario in "${SCENARIOS[@]}"; do
-    read -r E2E_WRITER E2E_SPLIT E2E_CLIENT E2E_MODE E2E_FORMATTER E2E_URLS <<<"$scenario"
-    export E2E_WRITER E2E_SPLIT E2E_CLIENT E2E_MODE E2E_FORMATTER E2E_URLS
-    echo "== writer=$E2E_WRITER split=$E2E_SPLIT client=$E2E_CLIENT mode=$E2E_MODE formatter=$E2E_FORMATTER urls=$E2E_URLS"
+    read -r E2E_WRITER E2E_SPLIT E2E_CLIENT E2E_MODE E2E_FORMATTER E2E_URLS E2E_QUERY <<<"$scenario"
+    export E2E_WRITER E2E_SPLIT E2E_CLIENT E2E_MODE E2E_FORMATTER E2E_URLS E2E_QUERY
+    echo "== writer=$E2E_WRITER split=$E2E_SPLIT client=$E2E_CLIENT mode=$E2E_MODE formatter=$E2E_FORMATTER urls=$E2E_URLS query=$E2E_QUERY"
 
     rm -rf "$GENERATED" e2e-ts/dist vendor/stubbedev/laravel-stoli/.cache
     mkdir -p "$GENERATED"
@@ -104,6 +104,13 @@ for scenario in "${SCENARIOS[@]}"; do
         [[ ! -e "$GENERATED/api.urls.ts" ]] || fail "url functions were generated without the option"
     fi
 
+    if [[ "$E2E_QUERY" == "none" ]]; then
+        [[ ! -e "$GENERATED/api.query.ts" && ! -e "$GENERATED/stoli-tanstack.ts" ]] || fail "query options were generated without the option"
+    else
+        [[ -f "$GENERATED/api.query.ts" && -f "$GENERATED/stoli-$E2E_QUERY.ts" ]] || fail "the $E2E_QUERY query options were not generated"
+        [[ ! -e "$GENERATED/pages.query.ts" ]] || fail "a standalone module got query options"
+    fi
+
     # 2. the check agrees
     php artisan stoli:generate --check --no-interaction || fail "stoli:generate --check disagrees with what was generated"
 
@@ -119,6 +126,7 @@ for scenario in "${SCENARIOS[@]}"; do
     http=("http.ts")
     [[ "$E2E_CLIENT" != "none" ]] && types+=("router-types.ts") && http+=("http-router.ts")
     [[ "$E2E_URLS" == "true" ]] && types+=("urls-types.ts") && http+=("http-urls.ts")
+    [[ "$E2E_QUERY" != "none" ]] && types+=("query-types.ts") && http+=("http-query.ts")
 
     tsconfig tsconfig.json tsconfig.scenario.json "${types[@]}"
     (cd e2e-ts && npx tsc -p tsconfig.scenario.json) || fail "the generated TypeScript does not hold to the type contract"
@@ -136,7 +144,7 @@ done
 
 if [[ -z "${E2E_ONLY:-}" ]]; then
     echo "== watch mode"
-    export E2E_WRITER=global E2E_SPLIT=true E2E_CLIENT=fetch E2E_MODE=transform E2E_FORMATTER=none E2E_URLS=false
+    export E2E_WRITER=global E2E_SPLIT=true E2E_CLIENT=fetch E2E_MODE=transform E2E_FORMATTER=none E2E_URLS=false E2E_QUERY=none
     rm -rf "$GENERATED" && mkdir -p "$GENERATED"
     cp routes/api.php /tmp/api.php
 

@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish a release for every tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Create missing releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          released="$(gh release list --limit 1000 --json tagName --jq '.[].tagName')"
+          latest="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          prev=""
+          for tag in $(git tag --list 'v*' --sort=v:refname); do
+            if ! grep -qxF -- "$tag" <<<"$released"; then
+              range="$tag"
+              compare=""
+              if [ -n "$prev" ]; then
+                range="$prev..$tag"
+                compare="$(printf '\n\n**Full changelog:** https://github.com/%s/compare/%s...%s\n' "$GH_REPO" "$prev" "$tag")"
+              fi
+              notes="$(git log --no-merges --format='- %s' "$range")$compare"
+              is_latest=false
+              [ "$tag" = "$latest" ] && is_latest=true
+              echo "creating release $tag"
+              gh release create "$tag" --verify-tag --title "$tag" --notes "$notes" --latest="$is_latest"
+            fi
+            prev="$tag"
+          done
